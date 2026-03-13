@@ -341,7 +341,7 @@ impl Rotation {
     #[inline(always)]
     pub const fn from_up_and_forward(up: Direction, forward: Direction) -> Option<Rotation> {
         // verified (2026-1-9)
-        const UP_AND_FORWARD_MATRIX: vcore::lowlevel::align::Align64<[[Option<Rotation>; 8]; 6]> = {
+        const UP_AND_FORWARD_MATRIX: CachePadded<[[Option<Rotation>; 8]; 6]> = {
             const fn from_up_and_forward_slow(up: Direction, forward: Direction) -> Option<Rotation> {
                 use Direction::*;
                 Some(Rotation::new(up, match (up, forward) {
@@ -372,21 +372,21 @@ impl Rotation {
                     _ => return None,
                 }))
             }
-            let mut matrix = vcore::lowlevel::align::Align64([[None; 8]; 6]);
+            let mut matrix = CachePadded { value: [[None; 8]; 6] };
             let mut up_i = 0usize;
             while up_i < 6 {
                 let up = Direction::INDEX_ORDER[up_i];
                 let mut fwd_i = 0usize;
                 while fwd_i < 6 {
                     let fwd = Direction::INDEX_ORDER[fwd_i];
-                    matrix.0[up_i][fwd_i] = from_up_and_forward_slow(up, fwd);
+                    matrix.value[up_i][fwd_i] = from_up_and_forward_slow(up, fwd);
                     fwd_i += 1;
                 }
                 up_i += 1;
             }
             matrix
         };
-        UP_AND_FORWARD_MATRIX.0[up.rotation_discriminant() as usize][forward.rotation_discriminant() as usize]
+        UP_AND_FORWARD_MATRIX.value[up.rotation_discriminant() as usize][forward.rotation_discriminant() as usize]
     }
     
     #[inline(always)]
