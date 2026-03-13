@@ -1,0 +1,16 @@
+[package]
+name = "voxel-orient"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+glam = ["dep:glam"]
+
+[dependencies]
+# Internal
+vcore.workspace = true
+
+# External
+paste.workspace = true
+glam = { workspace = true, optional = true }

@@ -8,5 +8,31 @@ license = "MIT"
 homepage = "https://github.com/ErisianArchitect/voxel"
 repository = "https://github.com/ErisianArchitect/voxel"
 readme = "README.md"
+publish = false
+
+[features]
+default = []
+glam = [
+    "dep:glam",
+    "orient/glam",
+    "vcore/glam",
+]
+
+[workspace]
+members = ["crates/*"]
+
+[workspace.dependencies]
+# Internal
+vcore = { package = "voxel-core", path = "crates/voxel_core", version = "0.1.0" }
+orient = { package = "voxel-orient", path = "crates/voxel_orient", version = "0.1.0" }
+
+# External
+paste = "1.0.15"
+glam = "0.32.1"
 
 [dependencies]
+vcore.workspace = true
+orient.workspace = true
+
+paste.workspace = true
+glam = { workspace = true, optional = true }

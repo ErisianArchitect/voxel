@@ -1,0 +1,18 @@
+[package]
+name = "voxel-core"
+authors = ["github.com/ErisianArchitect"]
+description = "Core library for the voxel crate."
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+homepage = "https://github.com/ErisianArchitect/voxel"
+repository = "https://github.com/ErisianArchitect/voxel"
+readme = "README.md"
+
+[features]
+default = []
+glam = ["dep:glam"]
+
+[dependencies]
+paste.workspace = true
+glam = { workspace = true, optional = true }
