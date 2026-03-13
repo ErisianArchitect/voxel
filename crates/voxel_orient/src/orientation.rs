@@ -351,6 +351,47 @@ impl Orientation {
     }
     
     // TODO: set_flip_x, set_flip_y, set_flip_z, set_flip_xy, set_flip_xz, set_flip_yz, set_flip_xyz
+    pub const fn set_flip_x(&mut self, x: bool) {
+        let mut flip = self.flip();
+        flip.set_x(x);
+        self.set_flip(flip);
+    }
+
+    pub const fn set_flip_y(&mut self, y: bool) {
+        let mut flip = self.flip();
+        flip.set_y(y);
+        self.set_flip(flip);
+    }
+
+    pub const fn set_flip_z(&mut self, z: bool) {
+        let mut flip = self.flip();
+        flip.set_z(z);
+        self.set_flip(flip);
+    }
+
+    pub const fn set_flip_xy(&mut self, xy: bool) {
+        let mut flip = self.flip();
+        flip.set_xy(xy);
+        self.set_flip(flip);
+    }
+
+    pub const fn set_flip_xz(&mut self, xz: bool) {
+        let mut flip = self.flip();
+        flip.set_xz(xz);
+        self.set_flip(flip);
+    }
+
+    pub const fn set_flip_yz(&mut self, yz: bool) {
+        let mut flip = self.flip();
+        flip.set_yz(yz);
+        self.set_flip(flip);
+    }
+
+    pub const fn set_flip_xyz(&mut self, xyz: bool) {
+        let mut flip = self.flip();
+        flip.set_xyz(xyz);
+        self.set_flip(flip);
+    }
 
     #[inline]
     pub const fn set_rotation(&mut self, rotation: Rotation) {
