@@ -1,3 +1,7 @@
+//! This library is used for orienting voxel blocks in a voxel library, but it can also be used for other purposes involving cube-orientations.
+//! Each orientation type (`Orientation`, `Rotation`, and `Flip`) are implementing using specialized enums as their backing.
+//! This allows them to take advantage of the niche optimization, meaning that `Option<Orientation>` is 1 byte, and so is `Option<Option<Orientation>>`.
+//! There are over 50 niches that `Orientation` can take advantage of, and even more for `Rotation` and `Flip`.
 
 /*====================================================================================*\
 ||I find that sometimes, using big lookup tables is the best solution to your problem.||
