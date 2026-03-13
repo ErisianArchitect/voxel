@@ -2,7 +2,7 @@
 name = "voxel"
 authors = ["github.com/ErisianArchitect"]
 description = "Voxel library for making voxel games."
-version = "0.1.0"
+version = "0.1.0-indev"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/ErisianArchitect/voxel"
@@ -23,8 +23,8 @@ members = ["crates/*"]
 
 [workspace.dependencies]
 # Internal
-vcore = { package = "voxel-core", path = "crates/voxel_core", version = "0.1.0" }
-orient = { package = "voxel-orient", path = "crates/voxel_orient", version = "0.1.0" }
+vcore = { package = "voxel-core", path = "crates/voxel_core", version = "0.1.0-indev" }
+orient = { package = "voxel-orient", path = "crates/voxel_orient", version = "0.1.0-indev" }
 
 # External
 paste = "1.0.15"

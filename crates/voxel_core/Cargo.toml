@@ -2,7 +2,7 @@
 name = "voxel-core"
 authors = ["github.com/ErisianArchitect"]
 description = "Core library for the voxel crate."
-version = "0.1.0"
+version = "0.1.0-indev"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/ErisianArchitect/voxel"
