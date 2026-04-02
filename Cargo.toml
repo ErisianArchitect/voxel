@@ -1,14 +1,24 @@
 [package]
 name = "voxel"
-authors = ["github.com/ErisianArchitect"]
 description = "Voxel library for making voxel games."
+readme = "README.md"
+# workspace.package
+authors.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+# Prevent publish. This is a reminder to double-check everything.
+publish = false
+
+[workspace.package]
+authors = ["github.com/ErisianArchitect"]
 version = "0.1.0-indev"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/ErisianArchitect/voxel"
 repository = "https://github.com/ErisianArchitect/voxel"
-readme = "README.md"
-publish = false
 
 [features]
 default = []

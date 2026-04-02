@@ -18,6 +18,7 @@ Changelog:
 */
 
 pub mod axis;
+pub mod canonical;
 pub mod direction;
 pub mod faces;
 pub mod flip;

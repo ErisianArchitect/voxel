@@ -1,7 +1,7 @@
 // Last Reviewed: 2025-12-28
 use paste::paste;
 
-use crate::{direction::Direction};
+use crate::{canonical::CanonicalGroup, direction::Direction};
 
 
 
@@ -255,7 +255,7 @@ impl Flip {
 
     #[inline]
     pub const fn flip(self, flip: Flip) -> Self {
-        Self(self.0.or(flip.0))
+        Self(self.0.xor(flip.0))
     }
     
     #[inline]
@@ -318,6 +318,51 @@ impl Flip {
     // pub const fn reverse_indices(self) -> bool {
     //     self.x() ^ self.y() ^ self.z()
     // }
+
+    #[must_use]
+    #[inline]
+    pub const fn canonical_group_x(self) -> CanonicalGroup {
+        match self {
+            Self::NONE => CanonicalGroup::Group0,
+            Self::X => CanonicalGroup::Group0,
+            Self::Y => CanonicalGroup::Group1,
+            Self::XY => CanonicalGroup::Group1,
+            Self::Z => CanonicalGroup::Group2,
+            Self::XZ => CanonicalGroup::Group2,
+            Self::YZ => CanonicalGroup::Group3,
+            Self::XYZ => CanonicalGroup::Group3,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn canonical_group_y(self) -> CanonicalGroup {
+        match self {
+            Self::NONE => CanonicalGroup::Group0,
+            Self::X => CanonicalGroup::Group1,
+            Self::Y => CanonicalGroup::Group0,
+            Self::XY => CanonicalGroup::Group1,
+            Self::Z => CanonicalGroup::Group2,
+            Self::XZ => CanonicalGroup::Group3,
+            Self::YZ => CanonicalGroup::Group2,
+            Self::XYZ => CanonicalGroup::Group3,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn canonical_group_z(self) -> CanonicalGroup {
+        match self {
+            Self::NONE => CanonicalGroup::Group0,
+            Self::X => CanonicalGroup::Group1,
+            Self::Y => CanonicalGroup::Group2,
+            Self::XY => CanonicalGroup::Group3,
+            Self::Z => CanonicalGroup::Group0,
+            Self::XZ => CanonicalGroup::Group1,
+            Self::YZ => CanonicalGroup::Group2,
+            Self::XYZ => CanonicalGroup::Group3,
+        }
+    }
 
     #[cfg(feature = "glam")]
     #[inline]
@@ -428,6 +473,7 @@ impl std::fmt::Display for Flip {
         if self.y() {
             if sep {
                 write!(f, "|")?;
+                sep = true;
             }
             write!(f, "Y")?;
         }
