@@ -66,4 +66,16 @@ impl CanonicalGroup {
             CanonicalGroup::Group3 => XY_ORIENT,
         }
     }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn eq(self, other: Self) -> bool {
+        self as u8 == other as u8
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn ne(self, other: Self) -> bool {
+        self as u8 != other as u8
+    }
 }

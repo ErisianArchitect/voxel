@@ -1,8 +1,8 @@
 // Last Reviewed: 2025-12-28
 use paste::paste;
+use vcore::lowlevel::checks;
 
-use crate::{canonical::CanonicalGroup, direction::Direction};
-
+use crate::{Axis, canonical::CanonicalGroup::{self, *}, direction::Direction};
 
 
 #[repr(u8)]
@@ -112,6 +112,7 @@ impl FlipState {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Flip(pub(crate) FlipState);
+const _: () = checks::assert_byte_niche::<Flip>();
 
 // Ensure that the niche optimization is working.
 const _: () = {
@@ -223,6 +224,13 @@ impl Flip {
     pub const NONE: Flip = Flip(FlipState::None);
     pub const ALL: Flip = Flip::XYZ;
 
+    const AXIAL_GROUPS: [[CanonicalGroup; 8]; 3] = [
+    //     Flip:  NONE    X       Y       XY      Z       XZ      YZ      XYZ
+    /* X Axis */ [Group0, Group0, Group1, Group1, Group2, Group2, Group3, Group3],
+    /* Y Axis */ [Group0, Group1, Group0, Group1, Group2, Group3, Group2, Group3],
+    /* Z Axis */ [Group0, Group1, Group2, Group3, Group0, Group1, Group2, Group3],
+    ];
+
     #[inline]
     pub const fn new(x: bool, y: bool, z: bool) -> Self {
         Self(unsafe { FlipState::from_u8_unchecked((x as u8) | ((y as u8) << 1) | ((z as u8) << 2)) })
@@ -314,54 +322,38 @@ impl Flip {
     }
 
     // /// If the [Flip] is being used to flip vertices, this method determines if the indices need to be reversed.
-    // #[inline]
-    // pub const fn reverse_indices(self) -> bool {
-    //     self.x() ^ self.y() ^ self.z()
-    // }
+    /// If this is being used to flip vertices, such as with [Orienation::transform],
+    /// this tests if the flipping operation would make the mesh inside out, in which
+    /// case you should reverse your vertex indices (or otherwise reverse the vertices
+    /// of the mesh).
+    #[must_use]
+    #[inline]
+    pub const fn is_mesh_inside_out(self) -> bool {
+        self.x() ^ self.y() ^ self.z()
+    }
 
     #[must_use]
     #[inline]
     pub const fn canonical_group_x(self) -> CanonicalGroup {
-        match self {
-            Self::NONE => CanonicalGroup::Group0,
-            Self::X => CanonicalGroup::Group0,
-            Self::Y => CanonicalGroup::Group1,
-            Self::XY => CanonicalGroup::Group1,
-            Self::Z => CanonicalGroup::Group2,
-            Self::XZ => CanonicalGroup::Group2,
-            Self::YZ => CanonicalGroup::Group3,
-            Self::XYZ => CanonicalGroup::Group3,
-        }
+        Self::AXIAL_GROUPS[Axis::X as usize][self.0 as usize]
     }
 
     #[must_use]
     #[inline]
     pub const fn canonical_group_y(self) -> CanonicalGroup {
-        match self {
-            Self::NONE => CanonicalGroup::Group0,
-            Self::X => CanonicalGroup::Group1,
-            Self::Y => CanonicalGroup::Group0,
-            Self::XY => CanonicalGroup::Group1,
-            Self::Z => CanonicalGroup::Group2,
-            Self::XZ => CanonicalGroup::Group3,
-            Self::YZ => CanonicalGroup::Group2,
-            Self::XYZ => CanonicalGroup::Group3,
-        }
+        Self::AXIAL_GROUPS[Axis::Y as usize][self.0 as usize]
     }
 
     #[must_use]
     #[inline]
     pub const fn canonical_group_z(self) -> CanonicalGroup {
-        match self {
-            Self::NONE => CanonicalGroup::Group0,
-            Self::X => CanonicalGroup::Group1,
-            Self::Y => CanonicalGroup::Group2,
-            Self::XY => CanonicalGroup::Group3,
-            Self::Z => CanonicalGroup::Group0,
-            Self::XZ => CanonicalGroup::Group1,
-            Self::YZ => CanonicalGroup::Group2,
-            Self::XYZ => CanonicalGroup::Group3,
-        }
+        Self::AXIAL_GROUPS[Axis::Z as usize][self.0 as usize]
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn canonical_group(self, axis: Axis) -> CanonicalGroup {
+        Self::AXIAL_GROUPS[axis as usize][self.0 as usize]
     }
 
     #[cfg(feature = "glam")]
@@ -387,6 +379,16 @@ impl Flip {
     pub fn to_matrix(self) -> glam::Mat4 {
         let scale = self.to_scale();
         glam::Mat4::from_scale(scale)
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn display(self, short: bool) -> FlipDisplay {
+        if short {
+            FlipDisplay::Short(FlipShortDisplay(self))
+        } else {
+            FlipDisplay::Long(FlipLongDisplay(self))
+        }
     }
 }
 
@@ -484,5 +486,55 @@ impl std::fmt::Display for Flip {
             write!(f, "Z")?;
         }
         write!(f, ")")
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct FlipShortDisplay(pub Flip);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct FlipLongDisplay(pub Flip);
+
+#[derive(Debug, Clone, Copy)]
+pub enum FlipDisplay {
+    Short(FlipShortDisplay),
+    Long(FlipLongDisplay),
+}
+
+impl std::fmt::Display for FlipShortDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,
+            "{}",
+            match self.0 {
+                Flip::NONE => "N",
+                Flip::X => "X",
+                Flip::Y => "Y",
+                Flip::XY => "XY",
+                Flip::Z => "Z",
+                Flip::XZ => "XZ",
+                Flip::YZ => "YZ",
+                Flip::XYZ => "XYZ",
+            }
+        )
+    }
+}
+
+impl std::fmt::Display for FlipLongDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,
+            "Flip::{}",
+            FlipShortDisplay(self.0),
+        )
+    }
+}
+
+impl std::fmt::Display for FlipDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FlipDisplay::Short(disp) => write!(f, "{disp}"),
+            FlipDisplay::Long(disp) => write!(f, "{disp}"),
+        }
     }
 }

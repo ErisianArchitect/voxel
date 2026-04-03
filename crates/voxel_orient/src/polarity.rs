@@ -65,4 +65,61 @@ impl Pol {
             Self::Pos => Self::Neg,
         }
     }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn display(self, short: bool) -> PolDisplay {
+        if short {
+            PolDisplay::Short(PolShortDisplay(self))
+        } else {
+            PolDisplay::Long(PolLongDisplay(self))
+        }
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct PolShortDisplay(pub Pol);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct PolLongDisplay(pub Pol);
+
+#[derive(Debug, Clone, Copy)]
+pub enum PolDisplay {
+    Short(PolShortDisplay),
+    Long(PolLongDisplay),
+}
+
+impl std::fmt::Display for PolShortDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,
+            "{}",
+            match self.0 {
+                Pol::Neg => '-',
+                Pol::Pos => '+',
+            }
+        )
+    }
+}
+
+impl std::fmt::Display for PolLongDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,
+            "{}",
+            match self.0 {
+                Pol::Neg => "Neg",
+                Pol::Pos => "Pos",
+            }
+        )
+    }
+}
+
+impl std::fmt::Display for PolDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PolDisplay::Short(pol_short_display) => write!(f, "{pol_short_display}"),
+            PolDisplay::Long(pol_long_display) => write!(f, "{pol_long_display}"),
+        }
+    }
 }

@@ -5,7 +5,7 @@
 **---------------------------------------------------------------------------------------*/
 
 use paste::paste;
-use vcore::lowlevel::cache_padded::CachePadded;
+use vcore::lowlevel::{cache_padded::CachePadded, checks};
 use crate::{
     direction::Direction, faces::Faces, orientation::Orientation, wrap_angle
 };
@@ -93,6 +93,7 @@ impl Rot {
 #[repr(transparent)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rotation(pub(crate) Rot);
+const _: () = checks::assert_byte_niche::<Rotation>();
 
 // const assertions.
 const _: () = {
@@ -1066,6 +1067,16 @@ impl Rotation {
         self.reorient(rot)
     }
 
+    #[must_use]
+    #[inline(always)]
+    pub const fn display(self, short: bool) -> RotationDisplay {
+        if short {
+            RotationDisplay::Short(RotationShortDisplay(self))
+        } else {
+            RotationDisplay::Long(RotationLongDisplay(self))
+        }
+    }
+
     // #[inline]
     // pub fn to_matrix(self) -> glam::Mat4 {
     //     let up = self.reface(Direction::PosY).to_vec3();
@@ -1136,5 +1147,53 @@ impl From<Direction> for Rotation {
 impl std::fmt::Display for Rotation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Rotation(up={},forward={},angle={})", self.up(), self.forward(), self.angle())
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct RotationShortDisplay(pub Rotation);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct RotationLongDisplay(pub Rotation);
+
+#[derive(Debug, Clone, Copy)]
+pub enum RotationDisplay {
+    Short(RotationShortDisplay),
+    Long(RotationLongDisplay),
+}
+
+impl std::fmt::Display for RotationShortDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let up = self.0.up();
+        write!(f,
+            "{polarity}{axis}{angle}",
+            polarity = up.polarity().display(true),
+            axis = up.axis().display(),
+            angle = self.0.angle(),
+        )
+    }
+}
+
+impl std::fmt::Display for RotationLongDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let up = self.0.up();
+        let angle = self.0.angle();
+        write!(f,
+            "Rotation(up={polarity}{axis},angle={angle})",
+            polarity = up.polarity().display(false),
+            axis = up.axis().display(),
+            angle = angle,
+        )
+    }
+}
+
+impl std::fmt::Display for RotationDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RotationDisplay::Short(disp) => write!(f, "{disp}"),
+            RotationDisplay::Long(disp) => write!(f, "{disp}"),
+        }
     }
 }

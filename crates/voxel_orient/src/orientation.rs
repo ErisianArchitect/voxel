@@ -1,7 +1,8 @@
 use crate::{
-    canonical::CanonicalGroup, direction::Direction, flip::Flip, orient_table, orientation_enum::Orient, pack_flip_and_rotation, polarity::Pol, rotation::Rotation, wrap_angle
+    Axis, canonical::CanonicalGroup, direction::Direction, flip::Flip, orient_table, orientation_enum::Orient, pack_flip_and_rotation, polarity::Pol, rotation::Rotation, wrap_angle
 };
 use vcore::lowlevel::cache_padded::CachePadded;
+use vcore::lowlevel::checks;
 use paste::paste;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,7 +31,6 @@ impl DeconstructedOrientation {
     }
 }
 
-// TODO: Switch to using an enum internally to take advantage
 // ::::: of niche optimization.
 // Field     : Bit Range
 // Flip      : 0..3
@@ -43,27 +43,10 @@ impl DeconstructedOrientation {
 #[repr(transparent)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Orientation(pub(crate) Orient);
-
-const _: () = {
-    macro_rules! niche_assert {
-        ($(
-            <$type:ty> == $size:literal,
-        )*) => {
-            $(
-                if ::core::mem::size_of::<$type>() != $size {
-                    panic!(concat!("Niche optimization failed: ", stringify!(<$type> == $size)));
-                }
-            )*
-        };
-    }
-    niche_assert!(
-        <Orientation> == 1,
-        <Option<Option<Option<Option<Orientation>>>>> == 1,
-        <Result<Orientation, ()>> == 1,
-        <Result<Orientation, Orientation>> == 2,
-        <Result<Option<Orientation>, Option<Orientation>>> == 2,
-    );
-};
+const _: () = checks::assert_byte_niche::<Orientation>();
+const _: () = checks::assert_byte_niche::<Option<Orientation>>();
+const _: () = checks::assert_byte_niche::<Option<Option<Orientation>>>();
+const _: () = checks::assert_byte_niche::<Option<Option<Option<Orientation>>>>();
 
 macro_rules! map_coord_impls {
     ($(
@@ -112,6 +95,38 @@ macro_rules! transform_impls {
     };
 }
 
+macro_rules! orient_cycle_read_body {
+    ($lhs:ident, $rhs: ident, $function:ident) => {
+        {
+            let mut dest = [Orientation::UNORIENTED; 4];
+            let mut cycler = $lhs;
+            let mut count = 0u8;
+            while count < 4 {
+                dest[count as usize] = cycler;
+                cycler = cycler.$function($rhs);
+                if cycler.eq($lhs) {
+                    break;
+                }
+                count += 1;
+            }
+            (count, dest)
+        }
+    };
+}
+
+macro_rules! orient_cycle_body {
+    ($function:ident($lhs:ident, $rhs:ident, $cycle:ident)) => {
+        {
+            if $rhs.eq(Orientation::UNORIENTED) {
+                return $lhs;
+            }
+            let (cycle_count, orientations) = $lhs.$function($rhs);
+            let cycle = $cycle.rem_euclid(cycle_count as i32);
+            orientations[cycle as usize]
+        }
+    };
+}
+
 impl Orientation {
     pub(crate) const TOTAL_ORIENTATION_COUNT: u8 = /* Flip */ 8 * /* Angle */ 4 * /* Up */ 6;
     pub(crate) const ORIENTATION_MAX: u8 = Self::TOTAL_ORIENTATION_COUNT - 1;
@@ -132,7 +147,23 @@ impl Orientation {
 
     pub const CANONICAL_X_GROUPS: [Orientation; 4] = [
         Orientation::UNORIENTED,
+        Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY),
+        Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ),
+        Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ),
+    ];
 
+    pub const CANONICAL_Y_GROUPS: [Orientation; 4] = [
+        Orientation::UNORIENTED,
+        Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY),
+        Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ),
+        Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ),
+    ];
+
+    pub const CANONICAL_Z_GROUPS: [Orientation; 4] = [
+        Orientation::UNORIENTED,
+        Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ),
+        Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ),
+        Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY),
     ];
     
     const INVERT_TABLE: CachePadded<[Self; 192]> = {
@@ -236,11 +267,13 @@ impl Orientation {
         Some(unsafe { Self::from_u8_unchecked(value) })
     }
     
+    #[must_use]
     #[inline(always)]
     pub const fn as_u8(self) -> u8 {
         self.0 as u8
     }
     
+    #[must_use]
     #[inline]
     pub const fn deconstruct(self) -> DeconstructedOrientation {
         DeconstructedOrientation {
@@ -249,6 +282,33 @@ impl Orientation {
             flip_z: self.flip().z(),
             angle: self.rotation().angle() as u8,
             up: self.rotation().up(),
+        }
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn canonical_x_orientation(group: CanonicalGroup) -> Orientation {
+        Self::CANONICAL_X_GROUPS[group as usize]
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn canonical_y_orientation(group: CanonicalGroup) -> Orientation {
+        Self::CANONICAL_Y_GROUPS[group as usize]
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn canonical_z_orientation(group: CanonicalGroup) -> Orientation {
+        Self::CANONICAL_Z_GROUPS[group as usize]
+    }
+
+    #[must_use]
+    pub const fn canonical_axis_orientation(axis: Axis, group: CanonicalGroup) -> Orientation {
+        match axis {
+            Axis::X => Self::canonical_x_orientation(group),
+            Axis::Y => Self::canonical_y_orientation(group),
+            Axis::Z => Self::canonical_z_orientation(group),
         }
     }
     
@@ -269,37 +329,131 @@ impl Orientation {
     pub const fn canonical_group_z(self) -> CanonicalGroup {
         self.flip().canonical_group_z()
     }
+
+    #[must_use]
+    pub const fn canonical_axis_group(self, axis: Axis) -> CanonicalGroup {
+        self.flip().canonical_group(axis)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn in_canonical_group_x(self, group: CanonicalGroup) -> Self {
+        let self_canon = self.canonicalize_x();
+        let group_canon = Self::canonical_x_orientation(group);
+        self_canon.deorient(group_canon)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn in_canonical_group_y(self, group: CanonicalGroup) -> Self {
+        let self_canon = self.canonicalize_y();
+        let group_canon = Self::canonical_y_orientation(group);
+        self_canon.deorient(group_canon)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn in_canonical_group_z(self, group: CanonicalGroup) -> Self {
+        let self_canon = self.canonicalize_z();
+        let group_canon = Self::canonical_z_orientation(group);
+        self_canon.deorient(group_canon)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn in_canonical_axis_group(self, axis: Axis, group: CanonicalGroup) -> Self {
+        match axis {
+            Axis::X => self.in_canonical_group_x(group),
+            Axis::Y => self.in_canonical_group_y(group),
+            Axis::Z => self.in_canonical_group_z(group),
+        }
+    }
+    #[must_use]
+    #[inline(always)]
+    pub const fn set_canonical_group_x(&mut self, group: CanonicalGroup) {
+        *self = self.in_canonical_group_x(group);
+    }
+
+    #[inline(always)]
+    pub const fn set_canonical_group_y(&mut self, group: CanonicalGroup) {
+        *self = self.in_canonical_group_y(group);
+    }
+
+    #[inline(always)]
+    pub const fn set_canonical_group_z(&mut self, group: CanonicalGroup) {
+        *self = self.in_canonical_group_z(group);
+    }
+
+    #[inline(always)]
+    pub const fn set_canonical_axis_group(&mut self, axis: Axis, group: CanonicalGroup) {
+        *self = self.in_canonical_axis_group(axis, group)
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_canonical_x_group(self, group: CanonicalGroup) -> bool {
+        self.canonical_group_x().eq(group)
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_canonical_y_group(self, group: CanonicalGroup) -> bool {
+        self.canonical_group_y().eq(group)
+    }
+
+    #[must_use]
+    pub const fn is_canonical_z_group(self, group: CanonicalGroup) -> bool {
+        self.canonical_group_z().eq(group)
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_canonical_axis_group(self, axis: Axis, group: CanonicalGroup) -> bool {
+        self.canonical_axis_group(axis).eq(group)
+    }
     
     #[must_use]
     #[inline(always)]
     pub const fn is_canonical_x(self) -> bool {
-        self.canonical_group_x() as u8 == 0
+        matches!(self.canonical_group_x(), CanonicalGroup::Group0)
     }
 
     #[must_use]
     #[inline(always)]
     pub const fn is_canonical_y(self) -> bool {
-        self.canonical_group_y() as u8 == 0
+        matches!(self.canonical_group_y(), CanonicalGroup::Group0)
     }
 
     #[must_use]
     #[inline(always)]
     pub const fn is_canonical_z(self) -> bool {
-        self.canonical_group_z() as u8 == 0
+        matches!(self.canonical_group_z(), CanonicalGroup::Group0)
     }
 
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_canonical_axis(self, axis: Axis) -> bool {
+        match axis {
+            Axis::X => self.is_canonical_x(),
+            Axis::Y => self.is_canonical_y(),
+            Axis::Z => self.is_canonical_z(),
+        }
+    }
+
+    /// Checks if any axis is canonical.
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_canonical(self) -> bool {
+        self.is_canonical_x() || self.is_canonical_y() || self.is_canonical_z()
+    }
+
+    #[must_use]
+    #[inline(always)]
     pub const fn canonicalize_x(self) -> Self {
         const CANONICAL_TABLE: CachePadded<[Orientation; 192]> = {
             const fn canonicalize_slow(orient: Orientation) -> Orientation {
-                const GROUP1: Orientation = Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY);
-                const GROUP2: Orientation = Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ);
-                const GROUP3: Orientation = Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ);
-                let new_orient = match orient.canonical_group_x() {
-                    CanonicalGroup::Group0 => orient,
-                    CanonicalGroup::Group1 => orient.reorient(GROUP1),
-                    CanonicalGroup::Group2 => orient.reorient(GROUP2),
-                    CanonicalGroup::Group3 => orient.reorient(GROUP3),
-                };
+                let new_orient = Orientation::CANONICAL_X_GROUPS[orient.canonical_group_x() as usize]
+                    .reorient(orient);
                 if !new_orient.is_equivalent(orient) {
                     panic!("Not equivalent!");
                 }
@@ -317,18 +471,13 @@ impl Orientation {
         CANONICAL_TABLE.value[self.0 as usize]
     }
 
+    #[must_use]
+    #[inline(always)]
     pub const fn canonicalize_y(self) -> Self {
         const CANONICAL_TABLE: CachePadded<[Orientation; 192]> = {
             const fn canonicalize_slow(orient: Orientation) -> Orientation {
-                const GROUP1: Orientation = Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY);
-                const GROUP2: Orientation = Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ);
-                const GROUP3: Orientation = Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ);
-                let new_orient = match orient.canonical_group_x() {
-                    CanonicalGroup::Group0 => orient,
-                    CanonicalGroup::Group1 => orient.reorient(GROUP1),
-                    CanonicalGroup::Group2 => orient.reorient(GROUP2),
-                    CanonicalGroup::Group3 => orient.reorient(GROUP3),
-                };
+                let new_orient = Orientation::CANONICAL_Y_GROUPS[orient.canonical_group_y() as usize]
+                    .reorient(orient);
                 if !new_orient.is_equivalent(orient) {
                     panic!("Not equivalent!");
                 }
@@ -346,25 +495,13 @@ impl Orientation {
         CANONICAL_TABLE.value[self.0 as usize]
     }
     
-    // TODO: Needs testing.
+    #[must_use]
     #[inline(always)]
     pub const fn canonicalize_z(self) -> Self {
         const CANONICAL_TABLE: CachePadded<[Orientation; 192]> = {
             const fn canonicalize_slow(orient: Orientation) -> Orientation {
-                // New:
-                // Group 0: None, Z
-                // Group 1: X, XZ
-                // Group 2: Y, YZ
-                // Group 3: XY, XYZ
-                const GROUP1: Orientation = Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ);
-                const GROUP2: Orientation = Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ);
-                const GROUP3: Orientation = Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY);
-                let new_orient = match orient.canonical_group_x() {
-                    CanonicalGroup::Group0 => orient,
-                    CanonicalGroup::Group1 => orient.reorient(GROUP1),
-                    CanonicalGroup::Group2 => orient.reorient(GROUP2),
-                    CanonicalGroup::Group3 => orient.reorient(GROUP3),
-                };
+                let new_orient = Orientation::CANONICAL_Z_GROUPS[orient.canonical_group_z() as usize]
+                    .reorient(orient);
                 if !new_orient.is_equivalent(orient) {
                     panic!("Not equivalent!");
                 }
@@ -380,6 +517,16 @@ impl Orientation {
             table
         };
         CANONICAL_TABLE.value[self.0 as usize]
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn canonicalize_axis(self, axis: Axis) -> Self {
+        match axis {
+            Axis::X => self.canonicalize_x(),
+            Axis::Y => self.canonicalize_y(),
+            Axis::Z => self.canonicalize_z(),
+        }
     }
     
     // verified (2025-12-28)
@@ -389,6 +536,7 @@ impl Orientation {
     /// The first orientation is unoriented, the second orientation is the target orientation
     /// applied once, the third orientation is the target orientation applied twice,
     /// and the fourth orientation is the target orientation applied three times.
+    #[must_use]
     pub const fn angles(self) -> [Orientation; 4] {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
@@ -405,6 +553,7 @@ impl Orientation {
     /// A helper function to create 3 orientations for a corner orientation group.
     /// The first orientation is unoriented, the second orientation is the target orientation,
     /// and the third orientation is the target orientation applied to itself.
+    #[must_use]
     pub const fn corner_angles(self) -> [Orientation; 3] {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
@@ -415,16 +564,19 @@ impl Orientation {
         ]
     }
 
+    #[must_use]
     #[inline(always)]
     pub const fn flip(self) -> Flip {
         unsafe { Flip::from_u8_unchecked(self.0 as u8 & 0b111) }
     }
     
+    #[must_use]
     #[inline(always)]
     pub const fn flipped(self, flip: Flip) -> Self {
         Self(unsafe { Orient::from_u8_unchecked(self.0 as u8 ^ flip.0 as u8) })
     }
 
+    #[must_use]
     #[inline(always)]
     pub const fn rotation(self) -> Rotation {
         // SAFETY: Here, we assume that `self` is a valid Orientation.
@@ -441,7 +593,6 @@ impl Orientation {
         self.0 = unsafe { Orient::from_u8_unchecked(self.0 as u8 & 0b11111000) };
     }
     
-    // TODO: set_flip_x, set_flip_y, set_flip_z, set_flip_xy, set_flip_xz, set_flip_yz, set_flip_xyz
     pub const fn set_flip_x(&mut self, x: bool) {
         let mut flip = self.flip();
         flip.set_x(x);
@@ -514,6 +665,7 @@ impl Orientation {
     /// There are other cycling options, such as cycling through
     /// the rotations first, then the flips, or cycling through
     /// only the rotations.
+    #[must_use]
     #[inline]
     pub const fn cycle(self, offset: i32) -> Self {
         // Here, we assume that `self` has a valid bit representation.
@@ -532,6 +684,70 @@ impl Orientation {
     pub const fn cycle_rotation(self, offset: i32) -> Self {
         Self::new(self.rotation().cycle(offset), self.flip())
     }
+
+    #[must_use]
+    pub const fn count_reorient_cycle_read(self, orientation: Self) -> (u8, [Orientation; 4]) {
+        orient_cycle_read_body!(self, orientation, reorient)
+    }
+
+    #[must_use]
+    pub const fn count_reorient_local_cycle_read(self, orientation: Self) -> (u8, [Orientation; 4]) {
+        orient_cycle_read_body!(self, orientation, reorient_local)
+    }
+
+    #[must_use]
+    pub const fn count_deorient_cycle_read(self, orientation: Self) -> (u8, [Orientation; 4]) {
+        orient_cycle_read_body!(self, orientation, deorient)
+    }
+
+    #[must_use]
+    pub const fn count_deorient_local_cycle_read(self, orientation: Self) -> (u8, [Orientation; 4]) {
+        orient_cycle_read_body!(self, orientation, deorient_local)
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn count_reorient_cycle(self, orientation: Self) -> u8 {
+        self.count_reorient_cycle_read(orientation).0
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn count_reorient_local_cycle(self, orientation: Self) -> u8 {
+        self.count_reorient_local_cycle_read(orientation).0
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn count_deorient_cycle(self, orientation: Self) -> u8 {
+        self.count_deorient_cycle_read(orientation).0
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn count_deorient_local_cycle(self, orientation: Self) -> u8 {
+        self.count_deorient_local_cycle_read(orientation).0
+    }
+
+    #[must_use]
+    pub const fn reorient_cycle(self, orientation: Self, cycle: i32) -> Self {
+        orient_cycle_body!(count_reorient_cycle_read(self, orientation, cycle))
+    }
+
+    #[must_use]
+    pub const fn reorient_local_cycle(self, orientation: Self, cycle: i32) -> Self {
+        orient_cycle_body!(count_reorient_local_cycle_read(self, orientation, cycle))
+    }
+
+    #[must_use]
+    pub const fn deorient_cycle(self, orientation: Self, cycle: i32) -> Self {
+        orient_cycle_body!(count_deorient_cycle_read(self, orientation, cycle))
+    }
+
+    #[must_use]
+    pub const fn deorient_local_cycle(self, orientation: Self, cycle: i32) -> Self {
+        orient_cycle_body!(count_deorient_local_cycle_read(self, orientation, cycle))
+    }
     
     /// This will cycle through the 8 [Flip] states before cycling the 24 [Rotation] states.
     /// 
@@ -545,6 +761,24 @@ impl Orientation {
     #[inline]
     pub fn iter_rotation_order() -> RotationFirstOrientationIterator {
         RotationFirstOrientationIterator::START
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub fn iter_canonical_x() -> CanonicalIter {
+        CanonicalIter::new(Axis::X)
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub fn iter_canonical_y() -> CanonicalIter {
+        CanonicalIter::new(Axis::Y)
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub fn iter_canonical_z() -> CanonicalIter {
+        CanonicalIter::new(Axis::Z)
     }
 
     // verified (2025-12-30)
@@ -629,7 +863,8 @@ impl Orientation {
     );
 
     /// Reorient `self` with `orientation`.
-    pub const fn reorient(self, orientation: Orientation) -> Self {
+    #[must_use]
+    pub const fn reorient(self, orientation: Self) -> Self {
         let up = self.up();
         let fwd = self.forward();
         let reup = orientation.reface(up);
@@ -644,15 +879,63 @@ impl Orientation {
         Orientation::new(rot, flip)
     }
     
-    #[inline]
-    pub const fn reorient_local(self, orientation: Orientation) -> Self {
+    #[must_use]
+    #[inline(always)]
+    pub const fn reorient_local(self, orientation: Self) -> Self {
         orientation.reorient(self)
-        
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn reorient_canonical_x(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_x();
+        let orientation = orientation.canonicalize_x();
+        self_canon.reorient(orientation)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn reorient_canonical_x_local(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_x();
+        let orientation = orientation.canonicalize_x();
+        orientation.reorient(self_canon)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn reorient_canonical_y(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_y();
+        let orientation = orientation.canonicalize_y();
+        self_canon.reorient(orientation)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn reorient_canonical_y_local(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_y();
+        let orientation = orientation.canonicalize_y();
+        orientation.reorient(self_canon)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn reorient_canonical_z(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_z();
+        let orientation = orientation.canonicalize_z();
+        self_canon.reorient(orientation)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn reorient_canonical_z_local(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_z();
+        let orientation = orientation.canonicalize_z();
+        orientation.reorient(self_canon)
     }
 
     /// Remove an orientation from an orientation.
     /// This is the inverse operation to [Orientation::reorient].
-    pub const fn deorient(self, orientation: Orientation) -> Self {
+    pub const fn deorient(self, orientation: Self) -> Self {
         let up = self.up();
         let fwd = self.forward();
         let reup = orientation.source_face(up);
@@ -667,9 +950,57 @@ impl Orientation {
         Orientation::new(rot, flip)
     }
     
-    #[inline]
-    pub const fn deorient_local(self, orientation: Orientation) -> Self {
+    #[inline] // TODO: I'm not so sure about this...
+    pub const fn deorient_local(self, orientation: Self) -> Self {
         orientation.invert().reorient(self)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn deorient_canonical_x(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_x();
+        let orientation = orientation.canonicalize_x();
+        self_canon.deorient(orientation)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn deorient_canonical_x_local(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_x();
+        let orientation = orientation.canonicalize_x();
+        orientation.deorient(self_canon)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn deorient_canonical_y(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_y();
+        let orientation = orientation.canonicalize_y();
+        self_canon.deorient(orientation)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn deorient_canonical_y_local(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_y();
+        let orientation = orientation.canonicalize_y();
+        orientation.deorient(self_canon)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn deorient_canonical_z(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_z();
+        let orientation = orientation.canonicalize_z();
+        self_canon.deorient(orientation)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn deorient_canonical_z_local(self, orientation: Self) -> Self {
+        let self_canon = self.canonicalize_z();
+        let orientation = orientation.canonicalize_z();
+        orientation.deorient(self_canon)
     }
     
     /// Returns the orientation that can be applied to deorient by [self].
@@ -794,10 +1125,32 @@ impl Orientation {
     }
 
     #[must_use]
+    #[inline(always)]
+    pub const fn eq(self, other: Self) -> bool {
+        self.0 as u8 == other.0 as u8
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn ne(self, other: Self) -> bool {
+        self.0 as u8 != other.0 as u8
+    }
+
+    #[must_use]
     pub const fn is_equivalent(self, other: Self) -> bool {
         self.up() as u8 == other.up() as u8
         && self.forward() as u8 == other.forward() as u8
         && self.right() as u8 == other.right() as u8
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn display(self, short: bool) -> OrientDisplay {
+        if short {
+            OrientDisplay::Short(OrientShortDisplay(self))
+        } else {
+            OrientDisplay::Long(OrientLongDisplay(self))
+        }
     }
 }
 
@@ -898,65 +1251,119 @@ impl Iterator for RotationFirstOrientationIterator {
     }
 }
 
+#[derive(Clone)]
+pub struct CanonicalIter {
+    rotation: u8,
+    flipped: bool,
+    flip: Flip,
+}
+
+impl CanonicalIter {
+    #[must_use]
+    #[inline(always)]
+    pub const fn new(flip: Axis) -> Self {
+        Self {
+            rotation: 0,
+            flipped: false,
+            flip: flip.as_flip(),
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn remaining(&self) -> usize {
+        (24 - self.rotation as usize) + (24 * !self.flipped as usize)
+    }
+
+    #[must_use]
+    pub const fn next(&mut self) -> Option<Orientation> {
+        if self.flipped && self.rotation >= 24 {
+            return None;
+        }
+        let rotation = unsafe { Rotation::from_u8_unchecked(self.rotation) };
+        let flip = [Flip::NONE, self.flip][self.flipped as usize];
+        self.rotation += 1;
+        if self.rotation >= 24 && !self.flipped {
+            self.rotation = 0;
+            self.flipped = true;
+        }
+        Some(Orientation::new(rotation, flip))
+    }
+}
+
+impl Iterator for CanonicalIter {
+    type Item = Orientation;
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remain = self.remaining();
+        (remain, Some(remain))
+    }
+    
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        CanonicalIter::next(self)
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct OrientLongDisplay(pub Orientation);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct OrientShortDisplay(pub Orientation);
+
+#[derive(Debug, Clone, Copy)]
+pub enum OrientDisplay {
+    Short(OrientShortDisplay),
+    Long(OrientLongDisplay),
+}
+
+impl std::fmt::Display for OrientLongDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,
+            "Orientation({rotation}, {flip})",
+            rotation = self.0.rotation().display(false),
+            flip = self.0.flip().display(false),
+        )
+    }
+}
+
+impl std::fmt::Display for OrientShortDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,
+            "{rotation}|{flip}",
+            rotation = self.0.rotation().display(true),
+            flip = self.0.flip().display(true),
+        )
+    }
+}
+
+impl std::fmt::Display for OrientDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OrientDisplay::Short(disp) => write!(f, "{disp}"),
+            OrientDisplay::Long(disp) => write!(f, "{disp}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
-    fn is_this_shit_broken() {
-        const GROUP1: Orientation = Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ);
-        const GROUP2: Orientation = Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ);
-        const GROUP3: Orientation = Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY);
-        let orient = Orientation::new(Rotation::new(Direction::PosY, 0), Flip::Y);
-        let new_orient = orient.reorient(GROUP2);
-        let new_flip = orient.flip().flip(Flip::YZ);
-        println!("{} {} {new_flip}", orient.flip(), GROUP2.flip());
-        println!("{orient}\n{new_orient}");
-    }
-
-    #[test]
-    fn canonicalize_test() {
-        const GROUP1: Orientation = Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ);
-        const GROUP2: Orientation = Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ);
-        const GROUP3: Orientation = Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY);
-        fn canonicalize_slow(orient: Orientation) -> Orientation {
-            // New:
-            // Group 0: None, Z
-            // Group 1: X, XZ
-            // Group 2: Y, YZ
-            // Group 3: XY, XYZ
-            let new_orient = match orient.flip() {
-                Flip::NONE => orient,
-                Flip::X => orient.reorient(GROUP1),
-                Flip::Y => orient.reorient(GROUP2),
-                Flip::XY => orient.reorient(GROUP3),
-                Flip::Z => orient,
-                Flip::XZ => orient.reorient(GROUP1),
-                Flip::YZ => orient.reorient(GROUP2),
-                Flip::XYZ => orient.reorient(GROUP3),
-            };
-            new_orient
-        }
-        let mut orient_i = 0u8;
-        while orient_i < 192 {
-            let orient = unsafe { Orientation::from_u8_unchecked(orient_i) };
-            let new_orient = canonicalize_slow(orient);
-            let group = orient.canonical_group();
-            let new_orient2 = match group {
-                0 => orient,
-                1 => orient.reorient(GROUP1),
-                2 => orient.reorient(GROUP2),
-                3 => orient.reorient(GROUP3),
-                _ => unreachable!(),
-            };
-            assert_eq!(new_orient, new_orient2);
-            if !new_orient.is_equivalent(orient) {
-                println!("{orient} -> {new_orient}");
-                for dir in Direction::ALL {
-                    println!("    {} -> {}", orient.reface(dir), new_orient.reface(dir));
-                }
-            }
-            orient_i += 1;
+    #[ignore]
+    fn sandbox() {
+        ////////////////////////////////
+        //      Testing Sandbox.      //
+        ////////////////////////////////
+        //
+        for orient in Orientation::iter_canonical_z() {
+            println!("{}", orient.display(true));
         }
     }
     
@@ -984,5 +1391,31 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn orient_cycle_test() {
+        for base in Orientation::iter() {
+            for orient in Orientation::iter() {
+                for cycle in -3..4 {
+                    let reoriented = base.reorient_local_cycle(orient, cycle);
+                    let deoriented = reoriented.deorient_local_cycle(orient, cycle);
+                    let deoriented2 = reoriented.reorient_local_cycle(orient.invert(), cycle);
+                    assert_eq!(base, deoriented);
+                    assert_eq!(base, deoriented2);
+                    let reoriented = base.reorient_cycle(orient, cycle);
+                    let deoriented = reoriented.deorient_cycle(orient, cycle);
+                    let deoriented2 = reoriented.reorient_cycle(orient.invert(), cycle);
+                    assert_eq!(base, deoriented);
+                    assert_eq!(base, deoriented2);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn canonical_tests() {
+        let GROUPS: [CanonicalGroup; 4] = unsafe { core::mem::transmute([0u8, 1u8, 2u8, 3u8]) };
+
     }
 }
