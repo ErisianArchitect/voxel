@@ -127,6 +127,29 @@ macro_rules! orient_cycle_body {
     };
 }
 
+macro_rules! canonical_table {
+    ($table:ident[$function:ident]) => {
+        {
+            const fn canonicalize_slow(orient: Orientation) -> Orientation {
+                let new_orient = Orientation::$table[orient.$function() as usize]
+                    .reorient(orient);
+                if !new_orient.is_equivalent(orient) {
+                    panic!("Not equivalent!");
+                }
+                new_orient
+            }
+            let mut table = CachePadded::new([Orientation::UNORIENTED; 192]);
+            let mut orient_i = 0u8;
+            while orient_i < 192 {
+                let orient = unsafe { Orientation::from_u8_unchecked(orient_i) };
+                table.value[orient_i as usize] = canonicalize_slow(orient);
+                orient_i += 1;
+            }
+            table
+        }
+    };
+}
+
 impl Orientation {
     pub(crate) const TOTAL_ORIENTATION_COUNT: u8 = /* Flip */ 8 * /* Angle */ 4 * /* Up */ 6;
     pub(crate) const ORIENTATION_MAX: u8 = Self::TOTAL_ORIENTATION_COUNT - 1;
@@ -450,72 +473,24 @@ impl Orientation {
     #[must_use]
     #[inline(always)]
     pub const fn canonicalize_x(self) -> Self {
-        const CANONICAL_TABLE: CachePadded<[Orientation; 192]> = {
-            const fn canonicalize_slow(orient: Orientation) -> Orientation {
-                let new_orient = Orientation::CANONICAL_X_GROUPS[orient.canonical_group_x() as usize]
-                    .reorient(orient);
-                if !new_orient.is_equivalent(orient) {
-                    panic!("Not equivalent!");
-                }
-                new_orient
-            }
-            let mut table = CachePadded::new([Orientation::UNORIENTED; 192]);
-            let mut orient_i = 0u8;
-            while orient_i < 192 {
-                let orient = unsafe { Orientation::from_u8_unchecked(orient_i) };
-                table.value[orient_i as usize] = canonicalize_slow(orient);
-                orient_i += 1;
-            }
-            table
-        };
+        const CANONICAL_TABLE: CachePadded<[Orientation; 192]>
+            = canonical_table!(CANONICAL_X_GROUPS[canonical_group_x]);
         CANONICAL_TABLE.value[self.0 as usize]
     }
 
     #[must_use]
     #[inline(always)]
     pub const fn canonicalize_y(self) -> Self {
-        const CANONICAL_TABLE: CachePadded<[Orientation; 192]> = {
-            const fn canonicalize_slow(orient: Orientation) -> Orientation {
-                let new_orient = Orientation::CANONICAL_Y_GROUPS[orient.canonical_group_y() as usize]
-                    .reorient(orient);
-                if !new_orient.is_equivalent(orient) {
-                    panic!("Not equivalent!");
-                }
-                new_orient
-            }
-            let mut table = CachePadded::new([Orientation::UNORIENTED; 192]);
-            let mut orient_i = 0u8;
-            while orient_i < 192 {
-                let orient = unsafe { Orientation::from_u8_unchecked(orient_i) };
-                table.value[orient_i as usize] = canonicalize_slow(orient);
-                orient_i += 1;
-            }
-            table
-        };
+        const CANONICAL_TABLE: CachePadded<[Orientation; 192]>
+            = canonical_table!(CANONICAL_Y_GROUPS[canonical_group_y]);
         CANONICAL_TABLE.value[self.0 as usize]
     }
     
     #[must_use]
     #[inline(always)]
     pub const fn canonicalize_z(self) -> Self {
-        const CANONICAL_TABLE: CachePadded<[Orientation; 192]> = {
-            const fn canonicalize_slow(orient: Orientation) -> Orientation {
-                let new_orient = Orientation::CANONICAL_Z_GROUPS[orient.canonical_group_z() as usize]
-                    .reorient(orient);
-                if !new_orient.is_equivalent(orient) {
-                    panic!("Not equivalent!");
-                }
-                new_orient
-            }
-            let mut table = CachePadded::new([Orientation::UNORIENTED; 192]);
-            let mut orient_i = 0u8;
-            while orient_i < 192 {
-                let orient = unsafe { Orientation::from_u8_unchecked(orient_i) };
-                table.value[orient_i as usize] = canonicalize_slow(orient);
-                orient_i += 1;
-            }
-            table
-        };
+        const CANONICAL_TABLE: CachePadded<[Orientation; 192]>
+            = canonical_table!(CANONICAL_Z_GROUPS[canonical_group_z]);
         CANONICAL_TABLE.value[self.0 as usize]
     }
 
@@ -686,67 +661,67 @@ impl Orientation {
     }
 
     #[must_use]
-    pub const fn count_reorient_cycle_read(self, orientation: Self) -> (u8, [Orientation; 4]) {
+    pub const fn count_reorient_cycle_calc(self, orientation: Self) -> (u8, [Orientation; 4]) {
         orient_cycle_read_body!(self, orientation, reorient)
     }
 
     #[must_use]
-    pub const fn count_reorient_local_cycle_read(self, orientation: Self) -> (u8, [Orientation; 4]) {
+    pub const fn count_reorient_local_cycle_calc(self, orientation: Self) -> (u8, [Orientation; 4]) {
         orient_cycle_read_body!(self, orientation, reorient_local)
     }
 
     #[must_use]
-    pub const fn count_deorient_cycle_read(self, orientation: Self) -> (u8, [Orientation; 4]) {
+    pub const fn count_deorient_cycle_calc(self, orientation: Self) -> (u8, [Orientation; 4]) {
         orient_cycle_read_body!(self, orientation, deorient)
     }
 
     #[must_use]
-    pub const fn count_deorient_local_cycle_read(self, orientation: Self) -> (u8, [Orientation; 4]) {
+    pub const fn count_deorient_local_cycle_calc(self, orientation: Self) -> (u8, [Orientation; 4]) {
         orient_cycle_read_body!(self, orientation, deorient_local)
     }
 
     #[must_use]
     #[inline(always)]
     pub const fn count_reorient_cycle(self, orientation: Self) -> u8 {
-        self.count_reorient_cycle_read(orientation).0
+        self.count_reorient_cycle_calc(orientation).0
     }
 
     #[must_use]
     #[inline(always)]
     pub const fn count_reorient_local_cycle(self, orientation: Self) -> u8 {
-        self.count_reorient_local_cycle_read(orientation).0
+        self.count_reorient_local_cycle_calc(orientation).0
     }
 
     #[must_use]
     #[inline(always)]
     pub const fn count_deorient_cycle(self, orientation: Self) -> u8 {
-        self.count_deorient_cycle_read(orientation).0
+        self.count_deorient_cycle_calc(orientation).0
     }
 
     #[must_use]
     #[inline(always)]
     pub const fn count_deorient_local_cycle(self, orientation: Self) -> u8 {
-        self.count_deorient_local_cycle_read(orientation).0
+        self.count_deorient_local_cycle_calc(orientation).0
     }
 
     #[must_use]
     pub const fn reorient_cycle(self, orientation: Self, cycle: i32) -> Self {
-        orient_cycle_body!(count_reorient_cycle_read(self, orientation, cycle))
+        orient_cycle_body!(count_reorient_cycle_calc(self, orientation, cycle))
     }
 
     #[must_use]
     pub const fn reorient_local_cycle(self, orientation: Self, cycle: i32) -> Self {
-        orient_cycle_body!(count_reorient_local_cycle_read(self, orientation, cycle))
+        orient_cycle_body!(count_reorient_local_cycle_calc(self, orientation, cycle))
     }
 
     #[must_use]
     pub const fn deorient_cycle(self, orientation: Self, cycle: i32) -> Self {
-        orient_cycle_body!(count_deorient_cycle_read(self, orientation, cycle))
+        orient_cycle_body!(count_deorient_cycle_calc(self, orientation, cycle))
     }
 
     #[must_use]
     pub const fn deorient_local_cycle(self, orientation: Self, cycle: i32) -> Self {
-        orient_cycle_body!(count_deorient_local_cycle_read(self, orientation, cycle))
+        orient_cycle_body!(count_deorient_local_cycle_calc(self, orientation, cycle))
     }
     
     /// This will cycle through the 8 [Flip] states before cycling the 24 [Rotation] states.
@@ -968,7 +943,7 @@ impl Orientation {
     pub const fn deorient_canonical_x_local(self, orientation: Self) -> Self {
         let self_canon = self.canonicalize_x();
         let orientation = orientation.canonicalize_x();
-        orientation.deorient(self_canon)
+        self_canon.deorient_local(orientation)
     }
 
     #[must_use]
@@ -984,7 +959,7 @@ impl Orientation {
     pub const fn deorient_canonical_y_local(self, orientation: Self) -> Self {
         let self_canon = self.canonicalize_y();
         let orientation = orientation.canonicalize_y();
-        orientation.deorient(self_canon)
+        self_canon.deorient_local(orientation)
     }
 
     #[must_use]
@@ -1000,13 +975,12 @@ impl Orientation {
     pub const fn deorient_canonical_z_local(self, orientation: Self) -> Self {
         let self_canon = self.canonicalize_z();
         let orientation = orientation.canonicalize_z();
-        orientation.deorient(self_canon)
+        self_canon.deorient_local(orientation)
     }
     
     /// Returns the orientation that can be applied to deorient by [self].
     #[inline]
     pub const fn invert(self) -> Self {
-        // Orientation::UNORIENTED.deorient(self)
         Self::INVERT_TABLE.value[self.0 as usize]
     }
     
@@ -1349,9 +1323,9 @@ impl std::fmt::Display for OrientDisplay {
     }
 }
 
+#[allow(unused)]
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
 
     use super::*;
 
@@ -1362,8 +1336,23 @@ mod tests {
         //      Testing Sandbox.      //
         ////////////////////////////////
         //
-        for orient in Orientation::iter_canonical_z() {
-            println!("{}", orient.display(true));
+        for orient in Orientation::iter_rotation_order() {
+            println!("{}", orient.display(false));
+        }
+    }
+
+    #[test]
+    fn in_canonical_test() {
+        const GROUPS: [CanonicalGroup; 4] = unsafe { core::mem::transmute([0u8, 1, 2, 3]) };
+        for orient in Orientation::iter() {
+            for group in GROUPS {
+                let in_group_x = orient.in_canonical_group_x(group);
+                let in_group_y = orient.in_canonical_group_y(group);
+                let in_group_z = orient.in_canonical_group_z(group);
+                assert!(orient.is_equivalent(in_group_x));
+                assert!(orient.is_equivalent(in_group_y));
+                assert!(orient.is_equivalent(in_group_z));
+            }
         }
     }
     
