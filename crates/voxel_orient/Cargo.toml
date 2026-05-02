@@ -21,3 +21,4 @@ vcore.workspace = true
 # External
 paste.workspace = true
 glam = { workspace = true, optional = true }
+lolevel.workspace = true

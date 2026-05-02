@@ -1,8 +1,10 @@
 use crate::{
     Axis, canonical::CanonicalGroup, direction::Direction, flip::Flip, orient_table, orientation_enum::Orient, pack_flip_and_rotation, polarity::Pol, rotation::Rotation, wrap_angle
 };
-use vcore::lowlevel::cache_padded::CachePadded;
-use vcore::lowlevel::checks;
+use lolevel::{
+    cache_padded::CachePadded,
+    checks,
+};
 use paste::paste;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -95,12 +97,13 @@ macro_rules! transform_impls {
     };
 }
 
-macro_rules! orient_cycle_read_body {
+macro_rules! orient_cycle_calc_body {
     ($lhs:ident, $rhs: ident, $function:ident) => {
         {
             let mut dest = [Orientation::UNORIENTED; 4];
             let mut cycler = $lhs;
             let mut count = 0u8;
+            // TODO: I'm pretty sure this is wrong.
             while count < 4 {
                 dest[count as usize] = cycler;
                 cycler = cycler.$function($rhs);
@@ -307,6 +310,28 @@ impl Orientation {
             up: self.rotation().up(),
         }
     }
+
+    transform_impls!(
+        i8,
+        i16,
+        i32,
+        i64,
+        i128,
+        isize,
+        f32,
+        f64,
+    );
+    
+    map_coord_impls!(
+        i8,
+        i16,
+        i32,
+        i64,
+        i128,
+        isize,
+        f32,
+        f64,
+    );
 
     #[must_use]
     #[inline(always)]
@@ -662,22 +687,22 @@ impl Orientation {
 
     #[must_use]
     pub const fn count_reorient_cycle_calc(self, orientation: Self) -> (u8, [Orientation; 4]) {
-        orient_cycle_read_body!(self, orientation, reorient)
+        orient_cycle_calc_body!(self, orientation, reorient)
     }
 
     #[must_use]
     pub const fn count_reorient_local_cycle_calc(self, orientation: Self) -> (u8, [Orientation; 4]) {
-        orient_cycle_read_body!(self, orientation, reorient_local)
+        orient_cycle_calc_body!(self, orientation, reorient_local)
     }
 
     #[must_use]
     pub const fn count_deorient_cycle_calc(self, orientation: Self) -> (u8, [Orientation; 4]) {
-        orient_cycle_read_body!(self, orientation, deorient)
+        orient_cycle_calc_body!(self, orientation, deorient)
     }
 
     #[must_use]
     pub const fn count_deorient_local_cycle_calc(self, orientation: Self) -> (u8, [Orientation; 4]) {
-        orient_cycle_read_body!(self, orientation, deorient_local)
+        orient_cycle_calc_body!(self, orientation, deorient_local)
     }
 
     #[must_use]
@@ -756,6 +781,12 @@ impl Orientation {
         CanonicalIter::new(Axis::Z)
     }
 
+    #[must_use]
+    #[inline(always)]
+    pub fn iter_canonical_axis(axis: Axis) -> CanonicalIter {
+        CanonicalIter::new(axis)
+    }
+
     // verified (2025-12-30)
     /// `reface` can be used to determine where a face will end up after orientation.
     /// First rotates and then flips the face.
@@ -814,28 +845,6 @@ impl Orientation {
     pub const fn right(self) -> Direction {
         self.reface(Direction::PosX)
     }
-
-    transform_impls!(
-        i8,
-        i16,
-        i32,
-        i64,
-        i128,
-        isize,
-        f32,
-        f64,
-    );
-    
-    map_coord_impls!(
-        i8,
-        i16,
-        i32,
-        i64,
-        i128,
-        isize,
-        f32,
-        f64,
-    );
 
     /// Reorient `self` with `orientation`.
     #[must_use]
@@ -908,6 +917,24 @@ impl Orientation {
         orientation.reorient(self_canon)
     }
 
+    #[must_use]
+    pub const fn reorient_canonical_axis(self, axis: Axis, orientation: Self) -> Self {
+        match axis {
+            Axis::X => self.reorient_canonical_x(orientation),
+            Axis::Y => self.reorient_canonical_y(orientation),
+            Axis::Z => self.reorient_canonical_z(orientation),
+        }
+    }
+
+    #[must_use]
+    pub const fn reorient_canonical_axis_local(self, axis: Axis, orientation: Self) -> Self {
+        match axis {
+            Axis::X => self.reorient_canonical_x_local(orientation),
+            Axis::Y => self.reorient_canonical_y_local(orientation),
+            Axis::Z => self.reorient_canonical_z_local(orientation),
+        }
+    }
+
     /// Remove an orientation from an orientation.
     /// This is the inverse operation to [Orientation::reorient].
     pub const fn deorient(self, orientation: Self) -> Self {
@@ -976,6 +1003,24 @@ impl Orientation {
         let self_canon = self.canonicalize_z();
         let orientation = orientation.canonicalize_z();
         self_canon.deorient_local(orientation)
+    }
+
+    #[must_use]
+    pub const fn deorient_canonical_axis(self, axis: Axis, orientation: Orientation) -> Self {
+        match axis {
+            Axis::X => self.deorient_canonical_x(orientation),
+            Axis::Y => self.deorient_canonical_y(orientation),
+            Axis::Z => self.deorient_canonical_z(orientation),
+        }
+    }
+
+    #[must_use]
+    pub const fn deorient_canonical_axis_local(self, axis: Axis, orientation: Orientation) -> Self {
+        match axis {
+            Axis::X => self.deorient_canonical_x_local(orientation),
+            Axis::Y => self.deorient_canonical_y_local(orientation),
+            Axis::Z => self.deorient_canonical_z_local(orientation),
+        }
     }
     
     /// Returns the orientation that can be applied to deorient by [self].
@@ -1336,8 +1381,14 @@ mod tests {
         //      Testing Sandbox.      //
         ////////////////////////////////
         //
-        for orient in Orientation::iter_rotation_order() {
-            println!("{}", orient.display(false));
+        for base in Orientation::iter_rotation_order() {
+            for orient in Orientation::iter_rotation_order() {
+                for cycle in -3..4 {
+                    let reoriented = base.reorient_cycle(orient, cycle);
+                    let deoriented = reoriented.deorient_cycle(orient, cycle);
+                    assert_eq!(base, deoriented);
+                }
+            }
         }
     }
 

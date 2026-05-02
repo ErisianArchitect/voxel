@@ -1,4 +1,4 @@
-use vcore::lowlevel::cache_padded::CachePadded;
+use lolevel::cache_padded::CachePadded;
 
 
 // Used for niche optimization in [Orientation] struct.

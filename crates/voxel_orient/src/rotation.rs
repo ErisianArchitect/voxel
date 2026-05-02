@@ -5,7 +5,10 @@
 **---------------------------------------------------------------------------------------*/
 
 use paste::paste;
-use vcore::lowlevel::{cache_padded::CachePadded, checks};
+use lolevel::{
+    cache_padded::CachePadded,
+    checks,
+};
 use crate::{
     direction::Direction, faces::Faces, orientation::Orientation, wrap_angle
 };

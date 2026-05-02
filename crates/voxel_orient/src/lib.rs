@@ -33,7 +33,7 @@ pub use direction::Direction;
 pub use flip::Flip;
 pub use orientation::Orientation;
 pub use rotation::Rotation;
-use vcore::lowlevel::cache_padded::CachePadded;
+use lolevel::cache_padded::CachePadded;
 
 // this code feels like cheating.
 

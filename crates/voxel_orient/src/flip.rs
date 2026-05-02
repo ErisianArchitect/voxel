@@ -1,6 +1,6 @@
 // Last Reviewed: 2025-12-28
 use paste::paste;
-use vcore::lowlevel::checks;
+use lolevel::checks;
 
 use crate::{Axis, canonical::CanonicalGroup::{self, *}, direction::Direction};
 

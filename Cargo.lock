@@ -9,6 +9,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
 
 [[package]]
+name = "lolevel"
+version = "0.3.0-indev"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abd78295df3093291a7d006d52dec111f8032f255a97b0151b4095131b3f8228"
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19,6 +25,7 @@ name = "voxel"
 version = "0.1.0-indev"
 dependencies = [
  "glam",
+ "lolevel",
  "paste",
  "voxel-core",
  "voxel-orient",
@@ -37,6 +44,7 @@ name = "voxel-orient"
 version = "0.1.0-indev"
 dependencies = [
  "glam",
+ "lolevel",
  "paste",
  "voxel-core",
 ]

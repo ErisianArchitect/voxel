@@ -39,6 +39,7 @@ orient = { package = "voxel-orient", path = "crates/voxel_orient", version = "0.
 # External
 paste = "1.0.15"
 glam = "0.32.1"
+lolevel = "0.3.0-indev"
 
 [dependencies]
 vcore.workspace = true
@@ -46,3 +47,4 @@ orient.workspace = true
 
 paste.workspace = true
 glam = { workspace = true, optional = true }
+lolevel.workspace = true
