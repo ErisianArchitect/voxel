@@ -2,7 +2,7 @@
 name = "voxel-orient"
 description = "Voxel cube orientation library."
 readme = "README.md"
-version = "0.1.0-indev"
+version = "0.2.0-indev"
 
 edition.workspace = true
 authors.workspace = true
