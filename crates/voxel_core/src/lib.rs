@@ -1,0 +1,1 @@
+//! Core library for the `voxel` crate.

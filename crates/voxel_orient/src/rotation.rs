@@ -65,18 +65,21 @@ pub enum Rot {
 
 impl Rot {
     pub const UNROTATED: Self = Self::PosY0;
-    pub const MAX: Self = Self::PosZ3;
+    pub const MAX: Self = Self::NegZ3;
+    #[must_use]
     #[inline(always)]
     pub const fn as_u8(self) -> u8 {
         self as u8
     }
     
     /// `value` is expected to be in the range `0..24`.
+    #[must_use]
     #[inline(always)]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         unsafe { ::core::mem::transmute(value) }
     }
     
+    #[must_use]
     #[inline(always)]
     pub const fn from_u8(value: u8) -> Option<Self> {
         if value >= 24 {
@@ -86,6 +89,7 @@ impl Rot {
     }
     
     /// `value % 24`
+    #[must_use]
     #[inline(always)]
     pub const fn from_u8_wrapping(value: u8) -> Self {
         let wrapped = wrap_rotation_u8(value);
@@ -98,18 +102,6 @@ impl Rot {
 pub struct Rotation(pub(crate) Rot);
 const _: () = checks::assert_byte_niche::<Rotation>();
 
-// const assertions.
-const _: () = {
-    let bare_size = size_of::<Rotation>();
-    let opt_size = size_of::<Option<Rotation>>();
-    if bare_size > 1 {
-        panic!("Size is greater than 1.");
-    }
-    if bare_size != opt_size {
-        panic!("Niche was not used.");
-    }
-};
-
 macro_rules! rotate_coord_fns {
     ($(
         $type:ty
@@ -117,6 +109,7 @@ macro_rules! rotate_coord_fns {
         $(
             paste!{
                 // verified (2026-1-5)
+                #[must_use]
                 pub const fn [<rotate_coord_ $type>](self, (x, y, z): ($type, $type, $type)) -> ($type, $type, $type) {
                     use Rot::*;
                     match self.0 {
@@ -198,12 +191,14 @@ impl Rotation {
     ];
 
     // verified (2025-12-28)
+    #[must_use]
     #[inline]
     pub const fn face_rotation(face: Direction, angle: i32) -> Self {
         Self::FACE_ROTATIONS[face.rotation_discriminant() as usize][wrap_angle(angle) as usize]
     }
     
     // verified (2025-12-28)
+    #[must_use]
     pub const fn corner_rotation(x: i32, y: i32, z: i32, angle: i32) -> Rotation {
         let x = if x <= 0 {
             0
@@ -224,11 +219,13 @@ impl Rotation {
         Self::CORNER_ROTATIONS_MATRIX[y][z][x][angle]
     }
     
+    #[must_use]
     #[inline]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         Self(unsafe { Rot::from_u8_unchecked(value) })
     }
     
+    #[must_use]
     #[inline]
     pub const fn from_u8(value: u8) -> Option<Self> {
         // Only first 24 values are valid rotations.
@@ -239,11 +236,13 @@ impl Rotation {
         Some(unsafe { Self::from_u8_unchecked(value) })
     }
     
+    #[must_use]
     #[inline]
     pub const fn from_u8_wrapping(value: u8) -> Self {
         unsafe { Self::from_u8_unchecked(wrap_rotation_u8(value)) }
     }
     
+    #[must_use]
     #[inline]
     pub const fn new(up: Direction, angle: i32) -> Self {
         let up = up.rotation_discriminant();
@@ -251,46 +250,54 @@ impl Rotation {
         unsafe { Self::from_u8_unchecked(angle | (up << Self::UP_SHIFT)) }
     }
     
+    #[must_use]
     #[inline]
     pub const fn from_up(up: Direction) -> Self {
         Self::new(up, 0)
     }
     
+    #[must_use]
     #[inline(always)]
     pub const fn as_u8(self) -> u8 {
         self.0 as u8
     }
     
     /// Creates a new [Rotation] with [Direction::NegX] as the up direction.
+    #[must_use]
     #[inline]
     pub const fn neg_x(angle: i32) -> Self {
         Self::new(Direction::NegX, angle)
     }
     
     /// Creates a new [Rotation] with [Direction::NegY] as the up direction.
+    #[must_use]
     #[inline]
     pub const fn neg_y(angle: i32) -> Self {
         Self::new(Direction::NegY, angle)
     }
     
     /// Creates a new [Rotation] with [Direction::NegZ] as the up direction.
+    #[must_use]
     #[inline]
     pub const fn neg_z(angle: i32) -> Self {
         Self::new(Direction::NegZ, angle)
     }
     
     /// Creates a new [Rotation] with [Direction::PosX] as the up direction.
+    #[must_use]
     #[inline]
     pub const fn pos_x(angle: i32) -> Self {
         Self::new(Direction::PosX, angle)
     }
     
     /// Creates a new [Rotation] with [Direction::PosY] as the up direction.
+    #[must_use]
     #[inline]
     pub const fn pos_y(angle: i32) -> Self {
         Self::new(Direction::PosY, angle)
     }
     
+    #[must_use]
     /// Creates a new [Rotation] with [Direction::PosZ] as the up direction.
     #[inline]
     pub const fn pos_z(angle: i32) -> Self {
@@ -304,6 +311,7 @@ impl Rotation {
     /// The first rotation is unrotated, the second rotation is the target rotation, the
     /// third rotation is the target rotation applied twice, and
     /// the fourth rotation is the target rotation applied three times.
+    #[must_use]
     pub const fn angles(self) -> [Self; 4] {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
@@ -320,6 +328,7 @@ impl Rotation {
     /// A helper function to create 3 rotations for a corner rotation group.
     /// The first rotation is unrotated, the second rotation is the target rotation,
     /// and the third rotation is the target rotation applied to itself.
+    #[must_use]
     pub const fn corner_angles(self) -> [Self; 3] {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
@@ -331,17 +340,20 @@ impl Rotation {
     }
 
     // verified (2025-12-28)
+    #[must_use]
     #[inline]
     pub const fn with_flip(self, flip: super::Flip) -> Orientation {
         Orientation::new(self, flip)
     }
 
     // verified (2025-12-28)
+    #[must_use]
     #[inline]
     pub const fn orientation(self) -> Orientation {
         self.with_flip(super::Flip::NONE)
     }
     
+    #[must_use]
     #[inline(always)]
     pub const fn from_up_and_forward(up: Direction, forward: Direction) -> Option<Rotation> {
         // verified (2026-1-9)
@@ -393,6 +405,7 @@ impl Rotation {
         UP_AND_FORWARD_MATRIX.value[up.rotation_discriminant() as usize][forward.rotation_discriminant() as usize]
     }
     
+    #[must_use]
     #[inline(always)]
     pub const fn faces(self) -> Faces {
         const UP_FORWARD_RIGHT_TABLE: CachePadded<[Faces; 24]> = {
@@ -414,8 +427,8 @@ impl Rotation {
 
     // Yes, this method works. I checked.
     /// Cycle through rotations (24 in total).
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn cycle(self, offset: i32) -> Self {
         let index = self.0 as i64;
         // Don't use wrapping_add here, as tempting as it seems. It would be incorrect because 2**32 is not a multiple of 24.
@@ -423,6 +436,7 @@ impl Rotation {
         unsafe { Self::from_u8_unchecked(new_index) }
     }
 
+    #[must_use]
     #[inline]
     pub const fn angle(self) -> i32 {
         (self.0 as u8 & Self::ANGLE_MASK) as i32
@@ -445,12 +459,14 @@ impl Rotation {
         };
     }
     
+    #[must_use]
     #[inline]
     pub fn iter() -> RotationIterator {
         RotationIterator::START
     }
     
     // verified (2026-1-5)
+    #[must_use]
     pub const fn up(self) -> Direction {
         use Direction::*;
         use Rot::*;
@@ -483,6 +499,7 @@ impl Rotation {
     }
 
     // verified (2026-1-5)
+    #[must_use]
     pub const fn down(self) -> Direction {
         use Direction::*;
         use Rot::*;
@@ -515,6 +532,7 @@ impl Rotation {
     }
 
     // verified (2026-1-5)
+    #[must_use]
     pub const fn left(self) -> Direction {
         use Direction::*;
         use Rot::*;
@@ -547,6 +565,7 @@ impl Rotation {
     }
 
     // verified (2026-1-5)
+    #[must_use]
     pub const fn right(self) -> Direction {
         use Direction::*;
         use Rot::*;
@@ -579,6 +598,7 @@ impl Rotation {
     }
 
     // verified (2026-1-5)
+    #[must_use]
     pub const fn forward(self) -> Direction {
         use Direction::*;
         use Rot::*;
@@ -611,6 +631,7 @@ impl Rotation {
     }
 
     // verified (2026-1-5)
+    #[must_use]
     pub const fn backward(self) -> Direction {
         use Direction::*;
         use Rot::*;
@@ -646,6 +667,7 @@ impl Rotation {
 
     // verified (2025-12-30)
     /// Rotates `coord`.
+    #[must_use]
     pub fn rotate_coord<T: Copy + std::ops::Neg<Output = T>, C: Into<(T, T, T)> + From<(T, T, T)>>(self, coord: C) -> C {
         let (x, y, z): (T, T, T) = coord.into();
         C::from(match self.0 {
@@ -678,6 +700,7 @@ impl Rotation {
     
     // verified (2025-12-28): reface and source_face are symmetrical.
     /// Rotates direction.
+    #[must_use]
     pub const fn reface(self, direction: Direction) -> Direction {
         match direction {
             Direction::NegX => self.left(),
@@ -691,6 +714,7 @@ impl Rotation {
 
     // verified (2025-12-28): source_face and reface are symmetrical.
     /// Tells which [Direction] rotated to `destination`.
+    #[must_use]
     pub const fn source_face(self, destination: Direction) -> Direction {
         // This code was bootstrap generated. I wrote a naive solution,
         // then generated this code with the naive solution.
@@ -852,6 +876,7 @@ impl Rotation {
     // verified (2025-12-28)
     // double verified (2025-12-29)
     /// Gets the angle of the face oriented to `world_face`.
+    #[must_use]
     pub fn face_angle(self, world_face: Direction) -> u8 {
         use Direction::*;
         match (self.angle(), self.up(), world_face) {
@@ -1005,6 +1030,7 @@ impl Rotation {
 
     // verified (2025-12-28)
     /// Rotate a [Rotation] by another [Rotation].
+    #[must_use]
     pub const fn reorient(self, rotation: Self) -> Self {
         // What??? I know I wrote this code, but this is kinda nuts.
         let up = self.up();
@@ -1021,6 +1047,7 @@ impl Rotation {
 
     // verified (2025-12-28)
     /// Rotate a [Rotation] by the inverse of another [Rotation].
+    #[must_use]
     pub const fn deorient(self, rotation: Self) -> Self {
         let up = self.up();
         let fwd = self.forward();
@@ -1036,27 +1063,32 @@ impl Rotation {
     
     // verified (2025-12-28)
     /// Creates a [Rotation] that when rotated by the original will create the base [Rotation].
+    #[must_use]
     #[inline]
     pub const fn invert(self) -> Self {
         Self::UNROTATED.deorient(self)
     }
 
+    #[must_use]
     #[inline]
     pub const fn rotate_x(self, angle: i32) -> Self {
         self.reorient(Self::X_ROTATIONS[wrap_angle(angle) as usize])
     }
 
+    #[must_use]
     #[inline]
     pub const fn rotate_y(self, angle: i32) -> Self {
         self.reorient(Self::Y_ROTATIONS[wrap_angle(angle) as usize])
     }
 
+    #[must_use]
     #[inline]
     pub const fn rotate_z(self, angle: i32) -> Self {
         self.reorient(Self::Z_ROTATIONS[wrap_angle(angle) as usize])
     }
 
     /// Rotate `face` counter-clockwise by `angle`. Use a negative `angle` to rotate clockwise.
+    #[must_use]
     #[inline]
     pub const fn rotate_face(self, face: Direction, angle: i32) -> Self {
         let rot = Self::face_rotation(face, angle);
@@ -1064,6 +1096,7 @@ impl Rotation {
     }
 
     /// Rotate corner clockwise by `angle`.
+    #[must_use]
     #[inline]
     pub const fn rotate_corner(self, x: i32, y: i32, z: i32, angle: i32) -> Self {
         let rot = Self::corner_rotation(x, y, z, angle);
@@ -1080,21 +1113,22 @@ impl Rotation {
         }
     }
 
-    // #[inline]
-    // pub fn to_matrix(self) -> glam::Mat4 {
-    //     let up = self.reface(Direction::PosY).to_vec3();
-    //     let forward = self.reface(Direction::PosZ).to_vec3();
-    //     let right = self.reface(Direction::NegX).to_vec3();
-    //     glam::Mat4::from_cols(
-    //         right.extend(0.0),
-    //         up.extend(0.0),
-    //         forward.extend(0.0),
-    //         glam::Vec3::ZERO.extend(1.0),
-    //     )
-    // }
+    #[cfg(feature = "glam")]
+    #[must_use]
+    pub fn to_matrix(self) -> glam::Mat4 {
+        let up = self.reface(Direction::PosY).to_vec3();
+        let forward = self.reface(Direction::PosZ).to_vec3();
+        let right = self.reface(Direction::NegX).to_vec3();
+        glam::Mat4::from_cols(
+            right.extend(0.0),
+            up.extend(0.0),
+            forward.extend(0.0),
+            glam::Vec3::ZERO.extend(1.0),
+        )
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RotationIterator {
     rotation: u8,
 }
@@ -1102,16 +1136,19 @@ pub struct RotationIterator {
 impl RotationIterator {
     pub const START: Self = Self { rotation: 0 };
     
+    #[must_use]
     #[inline]
     pub const fn start_at(rotation: Rotation) -> Self {
         Self { rotation: rotation.0 as u8 }
     }
     
+    #[must_use]
     #[inline]
     pub const fn new() -> Self {
         Self::START
     }
     
+    #[must_use]
     pub const fn current(self) -> Option<Rotation> {
         if self.rotation == 24 {
             return None;

@@ -2,8 +2,8 @@
 name = "voxel-core"
 description = "Core library for the voxel crate."
 readme = "README.md"
+version = "0.1.0-indev"
 
-version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true

@@ -2,8 +2,8 @@
 name = "voxel-orient"
 description = "Voxel cube orientation library."
 readme = "README.md"
+version = "0.1.0-indev"
 
-version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -16,7 +16,7 @@ glam = ["dep:glam"]
 
 [dependencies]
 # Internal
-vcore.workspace = true
+# vcore.workspace = true
 
 # External
 paste.workspace = true
