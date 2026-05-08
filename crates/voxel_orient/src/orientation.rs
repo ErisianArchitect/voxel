@@ -68,7 +68,7 @@ macro_rules! map_coord_impls {
                     let coordmap = orient_table::MAP_FACE_COORD_TABLE.get(self.rotation(), self.flip(), face);
                     coordmap.[<map_ $type>](uv)
                 }
-                
+
                 /// This method can tell you where on the source face a target UV is.
                 /// To get the most benefit out of this, it is advised that you center your coords around (0, 0).
                 /// So if you're trying to map a coord within a rect of size (16, 16), you would subtract 8 from the
@@ -167,11 +167,11 @@ impl Orientation {
     pub const ROTATE_X: Orientation = Rotation::ROTATE_X.orientation();
     pub const ROTATE_Y: Orientation = Rotation::ROTATE_Y.orientation();
     pub const ROTATE_Z: Orientation = Rotation::ROTATE_Z.orientation();
-    
+
     ////////////////////////////////////////////////////////////////
     //                       Lookup Tables                        //
     ////////////////////////////////////////////////////////////////
-    
+
     pub const X_ROTATIONS: [Orientation; 4] = Self::ROTATE_X.angles();
     pub const Y_ROTATIONS: [Orientation; 4] = Self::ROTATE_Y.angles();
     pub const Z_ROTATIONS: [Orientation; 4] = Self::ROTATE_Z.angles();
@@ -196,7 +196,7 @@ impl Orientation {
         Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ),
         Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY),
     ];
-    
+
     const INVERT_TABLE: CachePadded<[Self; 192]> = {
         let mut table = CachePadded::new([Self::UNORIENTED; 192]);
         let mut orient_int = 0u8;
@@ -207,11 +207,11 @@ impl Orientation {
         }
         table
     };
-    
+
     /// Although it is more logical to cycle through [Rotation] before
     /// [Flip], it is more logical to have [Flip] in the lower bits of
     /// [Orientation] since [Rotation] max value is not a power of two.
-    /// 
+    ///
     /// This array is ordered by [Rotation] first, then [Flip], allowing
     /// for cycling through rotations before flips.
     pub const ROTATION_ORDERED: CachePadded<[Self; 192]> = {
@@ -248,7 +248,7 @@ impl Orientation {
             [Rotation::new(Direction::NegX, 2).orientation().corner_angles(), Rotation::new(Direction::PosZ, 1).orientation().corner_angles()]
         ],
     ];
-    
+
     // verified (2025-12-29)
     // Ordered by Direction rotation discriminant (`PosY`, `PosX`, `PosZ`, `NegY`, `NegX`, `NegZ`)
     pub const FACE_ORIENTATIONS: [[Orientation; 4]; 6] = [
@@ -259,15 +259,15 @@ impl Orientation {
         Self::ROTATE_X.invert().angles(), // NegX
         Self::ROTATE_Z.invert().angles(), // NegZ
     ];
-    
-    /// An orientation that you can orient an orientation by to rotate around a face by angle. That was a mouthful.  
+
+    /// An orientation that you can orient an orientation by to rotate around a face by angle. That was a mouthful.
     /// If angle == 0, orientation is default orientation.
     #[must_use]
     #[inline]
     pub const fn face_orientation(face: Direction, angle: i32) -> Self {
         Self::FACE_ORIENTATIONS[face.rotation_discriminant() as usize][wrap_angle(angle) as usize]
     }
-    
+
     // `n <= 0` == `-N`, `n > 0` == `+N`
     #[must_use]
     #[inline]
@@ -281,19 +281,19 @@ impl Orientation {
     pub const fn new(rotation: Rotation, flip: Flip) -> Self {
         Self(unsafe { Orient::from_u8_unchecked(pack_flip_and_rotation(flip, rotation)) })
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         Self(unsafe { Orient::from_u8_unchecked(value) })
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const fn from_u8_wrapping(value: u8) -> Self {
         Self(Orient::from_u8_wrapping(value))
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const fn from_u8(value: u8) -> Option<Self> {
@@ -303,13 +303,13 @@ impl Orientation {
         // SAFETY: guard clause ensures that u8 is not invalid.
         Some(unsafe { Self::from_u8_unchecked(value) })
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const fn as_u8(self) -> u8 {
         self.0 as u8
     }
-    
+
     #[must_use]
     #[inline]
     pub const fn deconstruct(self) -> DeconstructedOrientation {
@@ -332,7 +332,7 @@ impl Orientation {
         f32,
         f64,
     );
-    
+
     map_coord_impls!(
         i8,
         i16,
@@ -370,7 +370,7 @@ impl Orientation {
             Axis::Z => Self::canonical_z_orientation(group),
         }
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const fn canonical_group_x(self) -> CanonicalGroup {
@@ -471,7 +471,7 @@ impl Orientation {
     pub const fn is_canonical_axis_group(self, axis: Axis, group: CanonicalGroup) -> bool {
         self.canonical_axis_group(axis).eq(group)
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const fn is_canonical_x(self) -> bool {
@@ -522,7 +522,7 @@ impl Orientation {
             = canonical_table!(CANONICAL_Y_GROUPS[canonical_group_y]);
         CANONICAL_TABLE.value[self.0 as usize]
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const fn canonicalize_z(self) -> Self {
@@ -540,9 +540,9 @@ impl Orientation {
             Axis::Z => self.canonicalize_z(),
         }
     }
-    
+
     // verified (2025-12-28)
-    /// A helper function to create 4 orientations for an orientation group.  
+    /// A helper function to create 4 orientations for an orientation group.
     /// An orientation group is a series of "contiguous" orientations. That is, the orientations are logically sequential.
     /// An example would be rotations around an axis, or around a face, where there are 4 orientations possible.
     /// The first orientation is unoriented, the second orientation is the target orientation
@@ -581,7 +581,7 @@ impl Orientation {
     pub const fn flip(self) -> Flip {
         unsafe { Flip::from_u8_unchecked(self.0 as u8 & 0b111) }
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const fn flipped(self, flip: Flip) -> Self {
@@ -599,12 +599,12 @@ impl Orientation {
     pub const fn set_flip(&mut self, flip: Flip) {
         self.0 = unsafe { Orient::from_u8_unchecked((self.0 as u8 & 0b11111000) | flip.0 as u8) };
     }
-    
+
     #[inline]
     pub const fn reset_flip(&mut self) {
         self.0 = unsafe { Orient::from_u8_unchecked(self.0 as u8 & 0b11111000) };
     }
-    
+
     pub const fn set_flip_x(&mut self, x: bool) {
         let mut flip = self.flip();
         flip.set_x(x);
@@ -651,7 +651,7 @@ impl Orientation {
     pub const fn set_rotation(&mut self, rotation: Rotation) {
         self.0 = unsafe { Orient::from_u8_unchecked((self.0 as u8 & 0b111) | ((rotation.0 as u8) << 3)) };
     }
-    
+
     #[inline]
     pub const fn reset_rotation(&mut self) {
         self.0 = unsafe { Orient::from_u8_unchecked(self.0 as u8 & 0b111) };
@@ -670,9 +670,9 @@ impl Orientation {
         rot.set_angle(angle);
         self.set_rotation(rot);
     }
-    
+
     /// Cycle through each [Orientation].
-    /// 
+    ///
     /// This will cycle through the [Flip] first.
     /// There are other cycling options, such as cycling through
     /// the rotations first, then the flips, or cycling through
@@ -683,7 +683,7 @@ impl Orientation {
         // Here, we assume that `self` has a valid bit representation.
         Self(unsafe { Orient::from_u8_unchecked((self.0 as i64 + offset as i64).rem_euclid(Self::TOTAL_ORIENTATION_COUNT as i64) as u8) })
     }
-    
+
     #[must_use]
     #[inline]
     pub const fn cycle_rotation_first(self, offset: i32) -> Self {
@@ -691,7 +691,7 @@ impl Orientation {
         let offset_index = (index + offset as i64).rem_euclid(Self::TOTAL_ORIENTATION_COUNT as i64) as usize;
         Self::ROTATION_ORDERED.value[offset_index]
     }
-    
+
     /// Keeps the [Flip], but cycles through [Rotation].
     #[must_use]
     #[inline]
@@ -762,17 +762,17 @@ impl Orientation {
     pub const fn deorient_local_cycle(self, orientation: Self, cycle: i32) -> Self {
         orient_cycle_body!(count_deorient_local_cycle_calc(self, orientation, cycle))
     }
-    
+
     // TODO: Maybe use a custom iterator type so that this can be made const?
     /// This will cycle through the 8 [Flip] states before cycling the 24 [Rotation] states.
-    /// 
+    ///
     /// If you would like a version that cycles the rotations before cycling the flips, use [Orientation::iter_rotation_order].
     #[must_use]
     #[inline]
     pub fn iter() -> impl Iterator<Item = Self> {
         (0..Self::TOTAL_ORIENTATION_COUNT).map(move |i| Self(unsafe { Orient::from_u8_unchecked(i) }))
     }
-    
+
     /// Cycle through the 24 [Rotation] states before cycling through the 8 [Flip] states.
     #[must_use]
     #[inline]
@@ -887,7 +887,7 @@ impl Orientation {
         };
         Orientation::new(rot, flip)
     }
-    
+
     #[must_use]
     #[inline(always)]
     pub const fn reorient_local(self, orientation: Self) -> Self {
@@ -977,7 +977,7 @@ impl Orientation {
         };
         Orientation::new(rot, flip)
     }
-    
+
     #[must_use]
     #[inline] // TODO: I'm not so sure about this...
     pub const fn deorient_local(self, orientation: Self) -> Self {
@@ -1049,14 +1049,14 @@ impl Orientation {
             Axis::Z => self.deorient_canonical_z_local(orientation),
         }
     }
-    
+
     /// Returns the orientation that can be applied to deorient by [self].
     #[must_use]
     #[inline]
     pub const fn invert(self) -> Self {
         Self::INVERT_TABLE.value[self.0 as usize]
     }
-    
+
     /// Flip the [Orientation] along the `X` axis.
     #[must_use]
     #[inline]
@@ -1077,28 +1077,28 @@ impl Orientation {
     pub const fn flip_z(self) -> Self {
         self.flipped(Flip::Z)
     }
-    
+
     /// Flip the [Orientation] along the `X` and `Y` axes.
     #[must_use]
     #[inline]
     pub const fn flip_xy(self) -> Self {
         self.flipped(Flip::XY)
     }
-    
+
     /// Flip the [Orientation] along the `X` and `Z` axes.
     #[must_use]
     #[inline]
     pub const fn flip_xz(self) -> Self {
         self.flipped(Flip::XZ)
     }
-    
+
     // Flip the [Orientation] along the `Y` and `Z` axes.
     #[must_use]
     #[inline]
     pub const fn flip_yz(self) -> Self {
         self.flipped(Flip::YZ)
     }
-    
+
     /// Flip the [Orientation] along the `X`, `Y`, and `Z` axes.
     #[must_use]
     #[inline]
@@ -1111,7 +1111,7 @@ impl Orientation {
     pub const fn rotate_x(self, angle: i32) -> Self {
         self.reorient(Orientation::X_ROTATIONS[wrap_angle(angle) as usize])
     }
-    
+
     #[must_use]
     #[inline]
     pub const fn rotate_local_x(self, angle: i32) -> Self {
@@ -1269,7 +1269,7 @@ impl RotationFirstOrientationIterator {
     pub const fn new() -> Self {
         Self::START
     }
-    
+
     #[must_use]
     #[inline]
     pub const fn start_at(orientation: Orientation) -> Self {
@@ -1278,7 +1278,7 @@ impl RotationFirstOrientationIterator {
             rotation: orientation.rotation().0 as u8,
         }
     }
-    
+
     /// Gets the current element without advancing the iterator.
     #[must_use]
     #[inline]
@@ -1295,13 +1295,13 @@ impl RotationFirstOrientationIterator {
 
 impl Iterator for RotationFirstOrientationIterator {
     type Item = Orientation;
-    
+
     fn size_hint(&self) -> (usize, Option<usize>) {
         const SIZE: usize = Orientation::TOTAL_ORIENTATION_COUNT as usize;
         let total = (self.flip as usize * 24) + self.rotation as usize;
         (SIZE - total, Some(SIZE - total))
     }
-    
+
     fn next(&mut self) -> Option<Self::Item> {
         if self.flip == 8 {
             return None;
@@ -1367,7 +1367,7 @@ impl Iterator for CanonicalIter {
         let remain = self.remaining();
         (remain, Some(remain))
     }
-    
+
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         CanonicalIter::next(self)
@@ -1455,7 +1455,7 @@ mod tests {
             }
         }
     }
-    
+
     #[test]
     fn rotation_first_order_test() {
         let iterator = ::core::iter::zip(
