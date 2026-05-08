@@ -36,11 +36,11 @@ impl Axis {
     #[must_use]
     #[inline(always)]
     pub const fn as_flip_if(self, flipped: bool) -> Flip {
-        const FLIPS: [Flip; 6] = [
-            Flip::NONE, Flip::NONE, Flip::NONE,
-            Flip::X, Flip::Y, Flip::Z,
-        ];
-        FLIPS[(self as usize) << (flipped as u32)]
+        if flipped {
+            self.as_flip()
+        } else {
+            Flip::NONE
+        }
     }
 
     /// Returns a [Flip] with the corresponding axis inverted.
