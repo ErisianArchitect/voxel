@@ -1,3 +1,4 @@
+
 [package]
 name = "voxel-orient"
 description = "Voxel cube orientation library."
@@ -6,9 +7,10 @@ version = "0.2.0-indev"
 
 edition.workspace = true
 authors.workspace = true
-license.workspace = true
+license-file.workspace = true
 homepage.workspace = true
 repository.workspace = true
+rust-version.workspace = true
 
 [features]
 default = []
@@ -22,3 +24,4 @@ glam = ["dep:glam"]
 paste.workspace = true
 glam = { workspace = true, optional = true }
 lolevel.workspace = true
+isit.workspace = true

@@ -1,8 +1,34 @@
-use core::{
-    mem::{
-        transmute,
-    },
-};
+// Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
+
+
+
+//! [Canonicalization](https://en.wikipedia.org/wiki/Canonicalization) is the process of converting data that has
+//! multiple representations into a "standard" representation.
+//! 
+//! There are 48 standard orientations for a voxel cube. These 48
+//! orientations are composed of 24 rotations, each with a flipped
+//! form (either along the X, Y, or Z axis). Each of these 48
+//! standard orientations has 3 alternative representations that
+//! have equivalent orientations. Two orientations are considered
+//! equivalent if they have the same Up, Right, and Forward
+//! directions. There are 4 groups of canonical orientations.
+//! `Group0`, `Group1`, `Group2` and `Group3`. These 4 groups have
+//! 48 orientations for each of the X, Y, and Z axes. There is some
+//! overlap between axes. Each group has a specific [Orientation]
+//! for canonicalization based on [Flip] state of the orientation
+//! being canonicalized, and the axis of canonicalization. These
+//! are Canonicalization Orientations. The Group0 is always
+//! [Orientation::UNORIENTED].
+//!
+//! # Axial Group Cayley Table
+//!
+//! |  Flip-->  | [Flip::NONE] | [Flip::X] | [Flip::Y] | [Flip::XY]    | [Flip::Z] | [Flip::XZ]    | [Flip::YZ]    | [Flip::XYZ]   |
+//! |:---------:|:------------:|:---------:|:---------:|:-------------:|:---------:|:-------------:|:-------------:|:-------------:|
+//! | [Axis::X] | Group0       | Group0    | Group1    | Group1        | Group2    | Group2        | Group3        | Group3        |
+//! | [Axis::Y] | Group0       | Group1    | Group0    | Group1        | Group2    | Group3        | Group2        | Group3        |
+//! | [Axis::Z] | Group0       | Group1    | Group2    | Group3        | Group0    | Group1        | Group2        | Group3        |
+
+use core::mem::transmute;
 
 use crate::{Direction, Flip, Orientation, Rotation};
 
@@ -10,6 +36,9 @@ const XY_ORIENT: Orientation = Orientation::new(Rotation::new(Direction::NegY, 2
 const XZ_ORIENT: Orientation = Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ);
 const YZ_ORIENT: Orientation = Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ);
 
+/// The [CanonicalGroup] represents which group of representations an orientation occupies.
+/// 
+/// For each orientation within the S3
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CanonicalGroup {
@@ -23,9 +52,8 @@ impl CanonicalGroup {
     #[must_use]
     #[inline(always)]
     pub const fn from_u8(group: u8) -> Self {
-        unsafe {
-            transmute(group & 0b11)
-        }
+        debug_assert!(group <= 0b11, "group value out of bounds (0..4)");
+        unsafe { transmute(group & 0b11) }
     }
 
     #[must_use]

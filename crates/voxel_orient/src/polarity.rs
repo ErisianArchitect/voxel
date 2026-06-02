@@ -1,3 +1,7 @@
+// Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
+
+
+
 use crate::{Axis, Direction};
 
 

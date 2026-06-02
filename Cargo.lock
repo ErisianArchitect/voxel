@@ -4,15 +4,21 @@ version = 4
 
 [[package]]
 name = "glam"
-version = "0.32.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+checksum = "8fb167719045debebe9f532320accc7b5c993c5a3b813f5696a11d5ca7bdc57b"
+
+[[package]]
+name = "isit"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f4575a928813120f1c29dff9037d0827a9a52991954410f7be605c81acbed24"
 
 [[package]]
 name = "lolevel"
-version = "0.3.0-indev"
+version = "1.0.0-indev"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abd78295df3093291a7d006d52dec111f8032f255a97b0151b4095131b3f8228"
+checksum = "a228951446940091fa6a38623821095b3f5c3de64728698d4d4d682b6786094f"
 
 [[package]]
 name = "paste"
@@ -44,6 +50,7 @@ name = "voxel-orient"
 version = "0.2.0-indev"
 dependencies = [
  "glam",
+ "isit",
  "lolevel",
  "paste",
 ]

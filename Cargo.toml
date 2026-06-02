@@ -1,24 +1,28 @@
+
 [package]
 name = "voxel"
 description = "Voxel library for making voxel games."
 readme = "README.md"
+
 # workspace.package
 authors.workspace = true
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
 homepage.workspace = true
 repository.workspace = true
+rust-version.workspace = true
 # Prevent publish. This is a reminder to double-check everything.
 publish = false
 
 [workspace.package]
-authors = ["github.com/ErisianArchitect"]
+authors = ["Ada F. <github.com/ErisianArchitect>"]
 version = "0.1.0-indev"
 edition = "2024"
-license = "MIT"
+license-file = "LICENSE"
 homepage = "https://github.com/ErisianArchitect/voxel"
 repository = "https://github.com/ErisianArchitect/voxel"
+rust-version = "1.95"
 
 [features]
 default = []
@@ -32,14 +36,29 @@ glam = [
 members = ["crates/*"]
 
 [workspace.dependencies]
-# Internal
+#################################################
+# Internal                                      #
+#################################################
 vcore = { package = "voxel-core", path = "crates/voxel_core", version = "0.1.0-indev" }
 orient = { package = "voxel-orient", path = "crates/voxel_orient", version = "0.2.0-indev" }
 
-# External
+#################################################
+# External                                      #
+#################################################
 paste = "1.0.15"
-glam = "0.32.1"
-lolevel = "0.3.0-indev"
+glam = "0.33.0"
+bytemuck = "1.25.0"
+
+#################################################
+# These are my own libraries (ErisianArchitect) #
+#################################################
+
+# For cache alignment/padding and other low-level utilities.
+lolevel = "1.0.0-indev"
+# For compile time type checks and other assertions.
+isit = "0.1.2"
+
+#################################################
 
 [dependencies]
 vcore.workspace = true

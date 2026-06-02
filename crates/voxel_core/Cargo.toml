@@ -1,3 +1,4 @@
+
 [package]
 name = "voxel-core"
 description = "Core library for the voxel crate."
@@ -6,7 +7,7 @@ version = "0.1.0-indev"
 
 edition.workspace = true
 authors.workspace = true
-license.workspace = true
+license-file.workspace = true
 homepage.workspace = true
 repository.workspace = true
 

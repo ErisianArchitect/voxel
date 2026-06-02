@@ -1,8 +1,15 @@
+// Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
+
+
+
 // Last Reviewed: 2025-12-28
 
 use crate::{
     axis::Axis, flip::Flip, polarity::Pol, rotation::Rotation, wrap_angle
 };
+
+#[cfg(feature = "glam")]
+use glam::{Vec3, Vec3A, IVec3};
 
 // NOTE: This API could be made to be universal if I switch NegAxis/PosAxis for named directions such as Up/Down.
 // ::::: Then consts could be made for various coordinate systems.
@@ -77,7 +84,7 @@ impl Direction {
     pub const TOP: Direction = Direction::UP;
     pub const BACKWARD: Direction = Direction::PosZ;
     pub const BACK: Direction = Direction::BACKWARD;
-    
+
     pub const NORTH: Direction = Direction::FORWARD;
     pub const WEST: Direction = Direction::LEFT;
     pub const SOUTH: Direction = Direction::BACKWARD;
@@ -119,7 +126,7 @@ impl Direction {
     pub fn rotate(self, rotation: Rotation) -> Self {
         rotation.reface(self)
     }
-    
+
     #[inline]
     pub const fn is_orthogonal_to(self, direction: Self) -> bool {
         self.axis() as u8 != direction.axis() as u8
@@ -136,7 +143,7 @@ impl Direction {
             NegZ | PosZ => Axis::Z,
         }
     }
-    
+
     #[inline]
     pub const fn polarity(self) -> Pol {
         use Direction::*;
@@ -145,7 +152,7 @@ impl Direction {
             PosX | PosY | PosZ => Pol::Pos,
         }
     }
-    
+
     #[inline]
     pub const fn polar_axis(self) -> (Pol, Axis) {
         use Direction::*;
@@ -158,7 +165,7 @@ impl Direction {
             PosZ => (Pol::Pos, Axis::Z),
         }
     }
-    
+
     #[inline]
     pub const fn from_polar_axis(polarity: Pol, axis: Axis) -> Self {
         match (polarity, axis) {
@@ -170,7 +177,7 @@ impl Direction {
             (Pol::Pos, Axis::Z) => Self::PosZ,
         }
     }
-    
+
     // verified (2026-1-5)
     /// Represents discriminant as single bit value.
     #[inline]
@@ -183,7 +190,7 @@ impl Direction {
     pub const fn discriminant(self) -> u8 {
         self as u8
     }
-    
+
     // verified (2025-12-28)
     // This order must not change! Certain code depends on it.
     #[inline]
@@ -197,7 +204,7 @@ impl Direction {
             Direction::NegZ => 5,
         }
     }
-    
+
     #[inline]
     pub const fn from_rotation_discriminant(rotation_discriminant: u8) -> Option<Self> {
         Some(match rotation_discriminant {
@@ -222,13 +229,13 @@ impl Direction {
     pub fn iter_discriminant_order() -> impl Iterator<Item = Direction> {
         Self::INDEX_ORDER.into_iter()
     }
-    
+
     /*============================================================*\
     ||The following functions (up/down/left/right) can be used for||
     ||verification of orientation code. It can also be used to    ||
     ||generate lookup tables.                                     ||
     \*============================================================*/
-    
+
     // verified (2025-12-28)
     /// On a non-oriented cube, each face has an "up" face. That's the face
     /// whose normal points to the top of the given face's UV plane.
@@ -244,7 +251,7 @@ impl Direction {
             PosZ => PosY,
         }
     }
-    
+
     // verified (2025-12-28)
     pub const fn up_at_angle(self, angle: i32) -> Direction {
         match wrap_angle(angle) {
@@ -272,7 +279,7 @@ impl Direction {
             PosZ => NegX,
         }
     }
-    
+
     // verified (2025-12-28)
     pub const fn left_at_angle(self, angle: i32) -> Direction {
         match wrap_angle(angle) {
@@ -300,7 +307,7 @@ impl Direction {
             PosZ => NegY,
         }
     }
-    
+
     // verified (2025-12-28)
     pub const fn down_at_angle(self, angle: i32) -> Direction {
         match wrap_angle(angle) {
@@ -328,7 +335,7 @@ impl Direction {
             PosZ => PosX,
         }
     }
-    
+
     // verified (2025-12-28)
     pub const fn right_at_angle(self, angle: i32) -> Direction {
         match wrap_angle(angle) {
@@ -338,36 +345,6 @@ impl Direction {
             3 => self.down(),
             // SAFETY: 0..4 are the only possible values for `wrap_angle(angle)`.
             _ => unsafe { ::core::hint::unreachable_unchecked() },
-        }
-    }
-
-    /// Converts the [Direction] into a unit vector.
-    #[cfg(feature = "glam")]
-    #[inline]
-    pub const fn to_vec3(self) -> glam::Vec3 {
-        use Direction::*;
-        match self {
-            NegX => glam::Vec3::new(-1.0,  0.0,  0.0),
-            NegY => glam::Vec3::new( 0.0, -1.0,  0.0),
-            NegZ => glam::Vec3::new( 0.0,  0.0, -1.0),
-            PosX => glam::Vec3::new( 1.0,  0.0,  0.0),
-            PosY => glam::Vec3::new( 0.0,  1.0,  0.0),
-            PosZ => glam::Vec3::new( 0.0,  0.0,  1.0),
-        }
-    }
-
-    /// Converts the [Direction] into a unit integer vector.
-    #[cfg(feature = "glam")]
-    #[inline]
-    pub const fn to_ivec3(self) -> glam::IVec3 {
-        use Direction::*;
-        match self {
-            NegX => glam::IVec3::new(-1,  0,  0),
-            NegY => glam::IVec3::new( 0, -1,  0),
-            NegZ => glam::IVec3::new( 0,  0, -1),
-            PosX => glam::IVec3::new( 1,  0,  0),
-            PosY => glam::IVec3::new( 0,  1,  0),
-            PosZ => glam::IVec3::new( 0,  0,  1),
         }
     }
 
@@ -412,6 +389,29 @@ impl Direction {
         let (x, y, z) = self.to_ituple();
         [x, y, z]
     }
+
+    /// Converts the [Direction] into a unit vector.
+    #[cfg(feature = "glam")]
+    #[inline]
+    pub const fn to_vec3(self) -> glam::Vec3 {
+        let (x, y, z) = self.to_ftuple();
+        glam::Vec3::new(x, y, z)
+    }
+
+    #[cfg(feature = "glam")]
+    #[inline]
+    pub const fn to_vec3a(self) -> Vec3A {
+        let (x, y, z) = self.to_ftuple();
+        glam::Vec3A::new(x, y, z)
+    }
+
+    /// Converts the [Direction] into a unit integer vector.
+    #[cfg(feature = "glam")]
+    #[inline]
+    pub const fn to_ivec3(self) -> glam::IVec3 {
+        let (x, y, z) = self.to_ituple();
+        glam::IVec3::new(x, y, z)
+    }
 }
 
 impl std::ops::Neg for Direction {
@@ -422,19 +422,21 @@ impl std::ops::Neg for Direction {
     }
 }
 
-// impl Into<Vec3> for Direction {
-//     #[inline]
-//     fn into(self) -> Vec3 {
-//         self.to_vec3()
-//     }
-// }
+#[cfg(feature = "glam")]
+impl Into<Vec3> for Direction {
+    #[inline]
+    fn into(self) -> Vec3 {
+        self.to_vec3()
+    }
+}
 
-// impl Into<IVec3> for Direction {
-//     #[inline]
-//     fn into(self) -> IVec3 {
-//         self.to_ivec3()
-//     }
-// }
+#[cfg(feature = "glam")]
+impl Into<IVec3> for Direction {
+    #[inline]
+    fn into(self) -> IVec3 {
+        self.to_ivec3()
+    }
+}
 
 impl Into<(i32, i32, i32)> for Direction {
     #[inline]

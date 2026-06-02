@@ -1,3 +1,7 @@
+// Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
+
+
+
 //! This library is used for orienting voxel blocks in a voxel library, but it can also be used for other purposes involving cube-orientations.
 //! Each orientation type (`Orientation`, `Rotation`, and `Flip`) are implementing using specialized enums as their backing.
 //! This allows them to take advantage of the niche optimization, meaning that `Option<Orientation>` is 1 byte, and so is `Option<Option<Orientation>>`.
@@ -10,30 +14,24 @@
 ||these tables was fairly complicated.                                                ||
 \*====================================================================================*/
 
-/*
-Goals:
-- Switch from using u8 to using specialized enums for niche optimization.
-Changelog:
-[Nothing here yet]
-*/
-
 pub mod axis;
 pub mod canonical;
 pub mod direction;
 pub mod faces;
 pub mod flip;
 pub mod orient_table;
-pub mod orientation_enum;
 pub mod orientation;
+pub mod orientation_enum;
+pub mod parity;
 pub mod polarity;
 pub mod rotation;
 
 pub use axis::Axis;
 pub use direction::Direction;
 pub use flip::Flip;
+use lolevel::cache_padded::CachePadded;
 pub use orientation::Orientation;
 pub use rotation::Rotation;
-use lolevel::cache_padded::CachePadded;
 
 // this code feels like cheating.
 
@@ -45,8 +43,9 @@ use lolevel::cache_padded::CachePadded;
 //      Y: 1
 //      Z: 2
 // Rotation: 3..8 (5 bits)
-//      angle: 3..5 (2 bits)
-//      up   : 5..8 (3 bits)
+//      A: 3..5 (2 bits)
+//      U: 5..8 (3 bits)
+// (A = Angle, U = Up)
 #[inline(always)]
 pub const fn pack_flip_and_rotation(flip: Flip, rotation: Rotation) -> u8 {
     flip.0 as u8 | ((rotation.0 as u8) << 3)
@@ -55,10 +54,9 @@ pub const fn pack_flip_and_rotation(flip: Flip, rotation: Rotation) -> u8 {
 #[inline(always)]
 pub const fn unpack_flip_and_rotation(packed: u8) -> (Flip, Rotation) {
     let rotation = (packed >> 3) % 24;
-    (
-        Flip::from_u8_wrapping(packed),
-        unsafe { Rotation::from_u8_unchecked(rotation) },
-    )
+    (Flip::from_u8_wrapping(packed), unsafe {
+        Rotation::from_u8_unchecked(rotation)
+    })
 }
 
 // verified (2025-12-28)
@@ -70,9 +68,8 @@ pub const fn wrap_angle(angle: i32) -> i32 {
 }
 
 // This should be cache aligned on the majority of systems.
-/// A simple array wrapper that aligns the array to 64 bytes, which
-/// is the most typical cache line size on modern (circa 2026) hardware.
-#[repr(C, align(64))]
+/// A simple array wrapper that aligns the array to the cache.
+#[repr(transparent)]
 pub struct CacheAlignedArray<T: 'static + Sized, const LEN: usize> {
     pub array: CachePadded<[T; LEN]>,
 }
@@ -81,13 +78,15 @@ impl<T, const LEN: usize> CacheAlignedArray<T, LEN> {
     #[must_use]
     #[inline(always)]
     pub const fn new(array: [T; LEN]) -> Self {
-        Self { array: CachePadded { value: array } }
+        Self {
+            array: CachePadded { value: array },
+        }
     }
 }
 
 impl<T, const LEN: usize> ::core::ops::Deref for CacheAlignedArray<T, LEN> {
     type Target = [T];
-    
+
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.array.value
@@ -101,7 +100,9 @@ impl<T, const LEN: usize> ::core::ops::DerefMut for CacheAlignedArray<T, LEN> {
     }
 }
 
-impl<T, const LEN: usize, I: ::core::slice::SliceIndex<[T], Output = T>> ::core::ops::Index<I> for CacheAlignedArray<T, LEN> {
+impl<T, const LEN: usize, I: ::core::slice::SliceIndex<[T], Output = T>> ::core::ops::Index<I>
+    for CacheAlignedArray<T, LEN>
+{
     type Output = T;
     #[inline(always)]
     fn index(&self, index: I) -> &Self::Output {
@@ -109,7 +110,9 @@ impl<T, const LEN: usize, I: ::core::slice::SliceIndex<[T], Output = T>> ::core:
     }
 }
 
-impl<T, const LEN: usize, I: ::core::slice::SliceIndex<[T], Output = T>> ::core::ops::IndexMut<I> for CacheAlignedArray<T, LEN> {
+impl<T, const LEN: usize, I: ::core::slice::SliceIndex<[T], Output = T>> ::core::ops::IndexMut<I>
+    for CacheAlignedArray<T, LEN>
+{
     #[inline(always)]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.array[index]
@@ -119,7 +122,7 @@ impl<T, const LEN: usize, I: ::core::slice::SliceIndex<[T], Output = T>> ::core:
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     #[ignore]
     fn quick_testing_sandbox() {
@@ -128,15 +131,15 @@ mod tests {
         ||Make sure to delete code after you are done testing.        ||
         \*============================================================*/
     }
-    
+
     #[test]
     fn orientation_test() {
         for dir in Direction::iter() {
             let orient = Orientation::new(Rotation::new(dir, 1), Flip::NONE);
-            
+
             let orient_face = orient.rotation().up();
             assert_eq!(orient.forward(), orient_face.left(), "forward: {dir}");
-            
+
             assert_eq!(
                 orient.reface(Direction::FORWARD),
                 orient_face.left(),
@@ -159,7 +162,7 @@ mod tests {
             );
         }
     }
-    
+
     /// verifies [Rotation::reface] function. By extension, also verifies [Rotation::up], [Rotation::down], [Rotation::left], [Rotation::right], [Rotation::forward], and [Rotation::backward].
     #[test]
     fn orientation_query_test() {
@@ -181,12 +184,15 @@ mod tests {
                     let rotation = Rotation::new(up, angle);
                     let rot_world = rotation.reface(world);
                     let rot_world_alt = rotate_world(up, angle, world);
-                    assert_eq!(rot_world, rot_world_alt, "(rot: [up: {up}, angle: {angle}], world: {world})");
+                    assert_eq!(
+                        rot_world, rot_world_alt,
+                        "(rot: [up: {up}, angle: {angle}], world: {world})"
+                    );
                 }
             }
         }
     }
-    
+
     // verifies `source_face` function as well as symmetry between `reface` and `source_face`.
     #[test]
     fn reface_sourceface_symmetry_test() {
@@ -204,7 +210,7 @@ mod tests {
         let elapsed = start_time.elapsed();
         println!("Elapsed Time: {elapsed:.3?}");
     }
-    
+
     #[test]
     fn transform_coord_test() {
         for flip in 0..8 {

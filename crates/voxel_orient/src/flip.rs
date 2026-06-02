@@ -1,22 +1,26 @@
+// Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
+
+
+
 // Last Reviewed: 2025-12-28
 use paste::paste;
-use lolevel::checks;
 
 use crate::{Axis, canonical::CanonicalGroup::{self, *}, direction::Direction};
 
 
+// This FlipState enum is used for niche optimization and match expression optimizations.
 #[repr(u8)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FlipState {
     #[default]
-    None = 0b000,
-    X = 0b001,
-    Y = 0b010,
-    Z = 0b100,
-    XY = 0b011,
-    XZ = 0b101,
-    YZ = 0b110,
-    XYZ = 0b111,
+    None  = 0b000,
+    X     = 0b001,
+    Y     = 0b010,
+    Z     = 0b100,
+    XY    = 0b011,
+    XZ    = 0b101,
+    YZ    = 0b110,
+    XYZ   = 0b111,
 }
 
 macro_rules! convert_ops {
@@ -112,7 +116,7 @@ impl FlipState {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Flip(pub(crate) FlipState);
-const _: () = checks::assert_byte_niche::<Flip>();
+const _: () = isit::assert_u8_niche::<Flip>();
 
 // Ensure that the niche optimization is working.
 const _: () = {
@@ -212,6 +216,7 @@ macro_rules! flip_coord_impls {
 }
 
 impl Flip {
+    #[rustfmt::skip]
     flip_axes!(
         {const X   = FlipState::X;   fn x  } // 1
         {const XY  = FlipState::XY;  fn xy } // 3
@@ -368,6 +373,24 @@ impl Flip {
             }
         }
         glam::vec3(
+            select_scale(self.x()),
+            select_scale(self.y()),
+            select_scale(self.z()),
+        )
+    }
+
+    #[cfg(feature = "glam")]
+    #[inline]
+    pub fn to_scale_vec3a(self) -> glam::Vec3A {
+        #[inline(always)]
+        fn select_scale(flipped: bool) -> f32 {
+            if flipped {
+                -1.0
+            } else {
+                1.0
+            }
+        }
+        glam::vec3a(
             select_scale(self.x()),
             select_scale(self.y()),
             select_scale(self.z()),

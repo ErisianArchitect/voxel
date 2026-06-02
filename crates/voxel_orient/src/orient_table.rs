@@ -1,3 +1,7 @@
+// Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
+
+
+
 use crate::{CacheAlignedArray, Orientation, direction::Direction, flip::Flip, rotation::Rotation};
 use paste::paste;
 

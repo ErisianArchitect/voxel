@@ -1,3 +1,7 @@
+// Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
+
+
+
 /*---------------------------------------------------------------------------------------**
 ||Angles increase in a counter-clockwise direction.                                      ||
 ||To get the angle in degress, multiply `angle.rem_euclid(4)` or `(angle & 0b11)` by 90. ||
@@ -7,13 +11,16 @@
 use paste::paste;
 use lolevel::{
     cache_padded::CachePadded,
-    checks,
 };
 use crate::{
     direction::Direction, faces::Faces, orientation::Orientation, wrap_angle
 };
 
+#[cfg(feature = "glam")]
+use glam::*;
+
 // verified (2026-1-5)
+/// Lookup table for pre-wrapped rotation indices for each byte value.
 pub(crate) const CACHED_WRAP_U8_ARRAY: CachePadded<[u8; 256]> = {
     const ROTATIONS_COUNT_U8: u8 = 24;
     let mut arr: CachePadded<[u8; 256]> = CachePadded::new([0u8; 256]);
@@ -27,12 +34,14 @@ pub(crate) const CACHED_WRAP_U8_ARRAY: CachePadded<[u8; 256]> = {
 };
 
 // hopefully speeds this operation up by using a (hopefully) cached table.
+#[must_use]
 #[inline(always)]
 pub const fn wrap_rotation_u8(rotation: u8) -> u8 {
     CACHED_WRAP_U8_ARRAY.value[rotation as usize]
 }
 
 // Verified (2026-1-4)
+// This Rot enum is used for niche optimization and other performance optimizations.
 #[repr(u8)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Rot {
@@ -64,21 +73,27 @@ pub enum Rot {
 }
 
 impl Rot {
+    /// The identity rotation (unrotated).
     pub const UNROTATED: Self = Self::PosY0;
+    /// The rotation value with the maximum discriminant value.
     pub const MAX: Self = Self::NegZ3;
+
+    /// Convert to the raw discriminant value as a [u8].
     #[must_use]
     #[inline(always)]
     pub const fn as_u8(self) -> u8 {
         self as u8
     }
-    
+
+    /// Create [Rot] from the raw discriminant value.
     /// `value` is expected to be in the range `0..24`.
     #[must_use]
     #[inline(always)]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         unsafe { ::core::mem::transmute(value) }
     }
-    
+
+    /// Attempt to create a [Rot] from a raw discriminat value.
     #[must_use]
     #[inline(always)]
     pub const fn from_u8(value: u8) -> Option<Self> {
@@ -87,7 +102,8 @@ impl Rot {
         }
         Some(unsafe { Self::from_u8_unchecked(value) })
     }
-    
+
+    /// Create a [Rot] from a discriminant that has been wrapped by the number of variants.
     /// `value % 24`
     #[must_use]
     #[inline(always)]
@@ -97,10 +113,11 @@ impl Rot {
     }
 }
 
+/// Represents the 
 #[repr(transparent)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rotation(pub(crate) Rot);
-const _: () = checks::assert_byte_niche::<Rotation>();
+const _: () = isit::assert_u8_niche::<Rotation>();
 
 macro_rules! rotate_coord_fns {
     ($(
@@ -145,6 +162,34 @@ macro_rules! rotate_coord_fns {
 }
 
 impl Rotation {
+    #[cfg(feature = "glam")]
+    const QUATS: [Quat; 24] = [
+        Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+        Quat::from_xyzw(0.0, 0.70710677, 0.0, 0.70710677),
+        Quat::from_xyzw(0.0, 1.0, 0.0, 0.0),
+        Quat::from_xyzw(0.0, 0.70710677, 0.0, -0.70710677),
+        Quat::from_xyzw(0.5, 0.5, -0.5, 0.5),
+        Quat::from_xyzw(0.70710677, 0.70710677, 0.0, 0.0),
+        Quat::from_xyzw(0.5, 0.5, 0.5, -0.5),
+        Quat::from_xyzw(0.0, 0.0, 0.70710677, -0.70710677),
+        Quat::from_xyzw(0.70710677, 0.0, 0.0, 0.70710677),
+        Quat::from_xyzw(0.5, 0.5, 0.5, 0.5),
+        Quat::from_xyzw(0.0, 0.70710677, 0.70710677, 0.0),
+        Quat::from_xyzw(0.5, -0.5, -0.5, 0.5),
+        Quat::from_xyzw(1.0, 0.0, 0.0, 0.0),
+        Quat::from_xyzw(0.70710677, 0.0, 0.70710677, 0.0),
+        Quat::from_xyzw(0.0, 0.0, 1.0, 0.0),
+        Quat::from_xyzw(0.70710677, 0.0, -0.70710677, 0.0),
+        Quat::from_xyzw(0.5, -0.5, 0.5, 0.5),
+        Quat::from_xyzw(0.0, 0.0, 0.70710677, 0.70710677),
+        Quat::from_xyzw(0.5, -0.5, -0.5, -0.5),
+        Quat::from_xyzw(0.70710677, -0.70710677, 0.0, 0.0),
+        Quat::from_xyzw(0.0, 0.70710677, -0.70710677, 0.0),
+        Quat::from_xyzw(0.5, 0.5, -0.5, -0.5),
+        Quat::from_xyzw(0.70710677, 0.0, 0.0, -0.70710677),
+        Quat::from_xyzw(0.5, -0.5, 0.5, -0.5),
+    ];
+
     pub const MIN: Self = Self(Rot::UNROTATED);
     // only 24 valid rotations (6 sides * 4 angles)
     pub const MAX: Self = Self(Rot::MAX);
@@ -444,9 +489,8 @@ impl Rotation {
 
     #[inline]
     pub fn set_up(&mut self, up: Direction) {
-        const ANGLE_ISOLATE_MASK: u8 = 0b00000011;
         self.0 = unsafe {
-            Rot::from_u8_unchecked((self.0 as u8 & ANGLE_ISOLATE_MASK) | (up.rotation_discriminant() << Self::UP_SHIFT))
+            Rot::from_u8_unchecked((self.0 as u8 & Self::ANGLE_MASK) | (up.rotation_discriminant() << Self::UP_SHIFT))
         };
     }
 
@@ -697,6 +741,11 @@ impl Rotation {
             Rot::NegZ3 /* (3, NegZ) */ => (z, -x, -y),
         })
     }
+
+    pub const fn difference(self, rotation: Self)  -> Self {
+        let unrotater = self.invert();
+        rotation.reorient(unrotater)
+    }
     
     // verified (2025-12-28): reface and source_face are symmetrical.
     /// Rotates direction.
@@ -724,151 +773,153 @@ impl Rotation {
         // By combining the angle, up, and destination into a single index,
         // this could become an O(1) lookup into a table.
         use Direction::*;
-        match ((self.angle(), self.up()), destination) {
-            ((0, PosY), PosY) => PosY,
-            ((0, PosY), PosX) => PosX,
-            ((0, PosY), PosZ) => PosZ,
-            ((0, PosY), NegY) => NegY,
-            ((0, PosY), NegX) => NegX,
-            ((0, PosY), NegZ) => NegZ,
-            ((0, PosX), PosY) => NegZ,
-            ((0, PosX), PosX) => PosY,
-            ((0, PosX), PosZ) => NegX,
-            ((0, PosX), NegY) => PosZ,
-            ((0, PosX), NegX) => NegY,
-            ((0, PosX), NegZ) => PosX,
-            ((0, PosZ), PosY) => NegZ,
-            ((0, PosZ), PosX) => PosX,
-            ((0, PosZ), PosZ) => PosY,
-            ((0, PosZ), NegY) => PosZ,
-            ((0, PosZ), NegX) => NegX,
-            ((0, PosZ), NegZ) => NegY,
-            ((0, NegY), PosY) => NegY,
-            ((0, NegY), PosX) => PosX,
-            ((0, NegY), PosZ) => NegZ,
-            ((0, NegY), NegY) => PosY,
-            ((0, NegY), NegX) => NegX,
-            ((0, NegY), NegZ) => PosZ,
-            ((0, NegX), PosY) => NegZ,
-            ((0, NegX), PosX) => NegY,
-            ((0, NegX), PosZ) => PosX,
-            ((0, NegX), NegY) => PosZ,
-            ((0, NegX), NegX) => PosY,
-            ((0, NegX), NegZ) => NegX,
-            ((0, NegZ), PosY) => NegZ,
-            ((0, NegZ), PosX) => NegX,
-            ((0, NegZ), PosZ) => NegY,
-            ((0, NegZ), NegY) => PosZ,
-            ((0, NegZ), NegX) => PosX,
-            ((0, NegZ), NegZ) => PosY,
-            ((1, PosY), PosY) => PosY,
-            ((1, PosY), PosX) => PosZ,
-            ((1, PosY), PosZ) => NegX,
-            ((1, PosY), NegY) => NegY,
-            ((1, PosY), NegX) => NegZ,
-            ((1, PosY), NegZ) => PosX,
-            ((1, PosX), PosY) => PosX,
-            ((1, PosX), PosX) => PosY,
-            ((1, PosX), PosZ) => NegZ,
-            ((1, PosX), NegY) => NegX,
-            ((1, PosX), NegX) => NegY,
-            ((1, PosX), NegZ) => PosZ,
-            ((1, PosZ), PosY) => PosX,
-            ((1, PosZ), PosX) => PosZ,
-            ((1, PosZ), PosZ) => PosY,
-            ((1, PosZ), NegY) => NegX,
-            ((1, PosZ), NegX) => NegZ,
-            ((1, PosZ), NegZ) => NegY,
-            ((1, NegY), PosY) => NegY,
-            ((1, NegY), PosX) => PosZ,
-            ((1, NegY), PosZ) => PosX,
-            ((1, NegY), NegY) => PosY,
-            ((1, NegY), NegX) => NegZ,
-            ((1, NegY), NegZ) => NegX,
-            ((1, NegX), PosY) => PosX,
-            ((1, NegX), PosX) => NegY,
-            ((1, NegX), PosZ) => PosZ,
-            ((1, NegX), NegY) => NegX,
-            ((1, NegX), NegX) => PosY,
-            ((1, NegX), NegZ) => NegZ,
-            ((1, NegZ), PosY) => PosX,
-            ((1, NegZ), PosX) => NegZ,
-            ((1, NegZ), PosZ) => NegY,
-            ((1, NegZ), NegY) => NegX,
-            ((1, NegZ), NegX) => PosZ,
-            ((1, NegZ), NegZ) => PosY,
-            ((2, PosY), PosY) => PosY,
-            ((2, PosY), PosX) => NegX,
-            ((2, PosY), PosZ) => NegZ,
-            ((2, PosY), NegY) => NegY,
-            ((2, PosY), NegX) => PosX,
-            ((2, PosY), NegZ) => PosZ,
-            ((2, PosX), PosY) => PosZ,
-            ((2, PosX), PosX) => PosY,
-            ((2, PosX), PosZ) => PosX,
-            ((2, PosX), NegY) => NegZ,
-            ((2, PosX), NegX) => NegY,
-            ((2, PosX), NegZ) => NegX,
-            ((2, PosZ), PosY) => PosZ,
-            ((2, PosZ), PosX) => NegX,
-            ((2, PosZ), PosZ) => PosY,
-            ((2, PosZ), NegY) => NegZ,
-            ((2, PosZ), NegX) => PosX,
-            ((2, PosZ), NegZ) => NegY,
-            ((2, NegY), PosY) => NegY,
-            ((2, NegY), PosX) => NegX,
-            ((2, NegY), PosZ) => PosZ,
-            ((2, NegY), NegY) => PosY,
-            ((2, NegY), NegX) => PosX,
-            ((2, NegY), NegZ) => NegZ,
-            ((2, NegX), PosY) => PosZ,
-            ((2, NegX), PosX) => NegY,
-            ((2, NegX), PosZ) => NegX,
-            ((2, NegX), NegY) => NegZ,
-            ((2, NegX), NegX) => PosY,
-            ((2, NegX), NegZ) => PosX,
-            ((2, NegZ), PosY) => PosZ,
-            ((2, NegZ), PosX) => PosX,
-            ((2, NegZ), PosZ) => NegY,
-            ((2, NegZ), NegY) => NegZ,
-            ((2, NegZ), NegX) => NegX,
-            ((2, NegZ), NegZ) => PosY,
-            ((3, PosY), PosY) => PosY,
-            ((3, PosY), PosX) => NegZ,
-            ((3, PosY), PosZ) => PosX,
-            ((3, PosY), NegY) => NegY,
-            ((3, PosY), NegX) => PosZ,
-            ((3, PosY), NegZ) => NegX,
-            ((3, PosX), PosY) => NegX,
-            ((3, PosX), PosX) => PosY,
-            ((3, PosX), PosZ) => PosZ,
-            ((3, PosX), NegY) => PosX,
-            ((3, PosX), NegX) => NegY,
-            ((3, PosX), NegZ) => NegZ,
-            ((3, PosZ), PosY) => NegX,
-            ((3, PosZ), PosX) => NegZ,
-            ((3, PosZ), PosZ) => PosY,
-            ((3, PosZ), NegY) => PosX,
-            ((3, PosZ), NegX) => PosZ,
-            ((3, PosZ), NegZ) => NegY,
-            ((3, NegY), PosY) => NegY,
-            ((3, NegY), PosX) => NegZ,
-            ((3, NegY), PosZ) => NegX,
-            ((3, NegY), NegY) => PosY,
-            ((3, NegY), NegX) => PosZ,
-            ((3, NegY), NegZ) => PosX,
-            ((3, NegX), PosY) => NegX,
-            ((3, NegX), PosX) => NegY,
-            ((3, NegX), PosZ) => NegZ,
-            ((3, NegX), NegY) => PosX,
-            ((3, NegX), NegX) => PosY,
-            ((3, NegX), NegZ) => PosZ,
-            ((3, NegZ), PosY) => NegX,
-            ((3, NegZ), PosX) => PosZ,
-            ((3, NegZ), PosZ) => NegY,
-            ((3, NegZ), NegY) => PosX,
-            ((3, NegZ), NegX) => NegZ,
-            ((3, NegZ), NegZ) => PosY,
+        use Rot::*;
+        // TODO: Use the new `Rot` variants to eliminate `self.angle, self.up` -> `self.0 as Rot`
+        match (self.0, destination) {
+            (PosY0, PosY) => PosY,
+            (PosY0, PosX) => PosX,
+            (PosY0, PosZ) => PosZ,
+            (PosY0, NegY) => NegY,
+            (PosY0, NegX) => NegX,
+            (PosY0, NegZ) => NegZ,
+            (PosX0, PosY) => NegZ,
+            (PosX0, PosX) => PosY,
+            (PosX0, PosZ) => NegX,
+            (PosX0, NegY) => PosZ,
+            (PosX0, NegX) => NegY,
+            (PosX0, NegZ) => PosX,
+            (PosZ0, PosY) => NegZ,
+            (PosZ0, PosX) => PosX,
+            (PosZ0, PosZ) => PosY,
+            (PosZ0, NegY) => PosZ,
+            (PosZ0, NegX) => NegX,
+            (PosZ0, NegZ) => NegY,
+            (NegY0, PosY) => NegY,
+            (NegY0, PosX) => PosX,
+            (NegY0, PosZ) => NegZ,
+            (NegY0, NegY) => PosY,
+            (NegY0, NegX) => NegX,
+            (NegY0, NegZ) => PosZ,
+            (NegX0, PosY) => NegZ,
+            (NegX0, PosX) => NegY,
+            (NegX0, PosZ) => PosX,
+            (NegX0, NegY) => PosZ,
+            (NegX0, NegX) => PosY,
+            (NegX0, NegZ) => NegX,
+            (NegZ0, PosY) => NegZ,
+            (NegZ0, PosX) => NegX,
+            (NegZ0, PosZ) => NegY,
+            (NegZ0, NegY) => PosZ,
+            (NegZ0, NegX) => PosX,
+            (NegZ0, NegZ) => PosY,
+            (PosY1, PosY) => PosY,
+            (PosY1, PosX) => PosZ,
+            (PosY1, PosZ) => NegX,
+            (PosY1, NegY) => NegY,
+            (PosY1, NegX) => NegZ,
+            (PosY1, NegZ) => PosX,
+            (PosX1, PosY) => PosX,
+            (PosX1, PosX) => PosY,
+            (PosX1, PosZ) => NegZ,
+            (PosX1, NegY) => NegX,
+            (PosX1, NegX) => NegY,
+            (PosX1, NegZ) => PosZ,
+            (PosZ1, PosY) => PosX,
+            (PosZ1, PosX) => PosZ,
+            (PosZ1, PosZ) => PosY,
+            (PosZ1, NegY) => NegX,
+            (PosZ1, NegX) => NegZ,
+            (PosZ1, NegZ) => NegY,
+            (NegY1, PosY) => NegY,
+            (NegY1, PosX) => PosZ,
+            (NegY1, PosZ) => PosX,
+            (NegY1, NegY) => PosY,
+            (NegY1, NegX) => NegZ,
+            (NegY1, NegZ) => NegX,
+            (NegX1, PosY) => PosX,
+            (NegX1, PosX) => NegY,
+            (NegX1, PosZ) => PosZ,
+            (NegX1, NegY) => NegX,
+            (NegX1, NegX) => PosY,
+            (NegX1, NegZ) => NegZ,
+            (NegZ1, PosY) => PosX,
+            (NegZ1, PosX) => NegZ,
+            (NegZ1, PosZ) => NegY,
+            (NegZ1, NegY) => NegX,
+            (NegZ1, NegX) => PosZ,
+            (NegZ1, NegZ) => PosY,
+            (PosY2, PosY) => PosY,
+            (PosY2, PosX) => NegX,
+            (PosY2, PosZ) => NegZ,
+            (PosY2, NegY) => NegY,
+            (PosY2, NegX) => PosX,
+            (PosY2, NegZ) => PosZ,
+            (PosX2, PosY) => PosZ,
+            (PosX2, PosX) => PosY,
+            (PosX2, PosZ) => PosX,
+            (PosX2, NegY) => NegZ,
+            (PosX2, NegX) => NegY,
+            (PosX2, NegZ) => NegX,
+            (PosZ2, PosY) => PosZ,
+            (PosZ2, PosX) => NegX,
+            (PosZ2, PosZ) => PosY,
+            (PosZ2, NegY) => NegZ,
+            (PosZ2, NegX) => PosX,
+            (PosZ2, NegZ) => NegY,
+            (NegY2, PosY) => NegY,
+            (NegY2, PosX) => NegX,
+            (NegY2, PosZ) => PosZ,
+            (NegY2, NegY) => PosY,
+            (NegY2, NegX) => PosX,
+            (NegY2, NegZ) => NegZ,
+            (NegX2, PosY) => PosZ,
+            (NegX2, PosX) => NegY,
+            (NegX2, PosZ) => NegX,
+            (NegX2, NegY) => NegZ,
+            (NegX2, NegX) => PosY,
+            (NegX2, NegZ) => PosX,
+            (NegZ2, PosY) => PosZ,
+            (NegZ2, PosX) => PosX,
+            (NegZ2, PosZ) => NegY,
+            (NegZ2, NegY) => NegZ,
+            (NegZ2, NegX) => NegX,
+            (NegZ2, NegZ) => PosY,
+            (PosY3, PosY) => PosY,
+            (PosY3, PosX) => NegZ,
+            (PosY3, PosZ) => PosX,
+            (PosY3, NegY) => NegY,
+            (PosY3, NegX) => PosZ,
+            (PosY3, NegZ) => NegX,
+            (PosX3, PosY) => NegX,
+            (PosX3, PosX) => PosY,
+            (PosX3, PosZ) => PosZ,
+            (PosX3, NegY) => PosX,
+            (PosX3, NegX) => NegY,
+            (PosX3, NegZ) => NegZ,
+            (PosZ3, PosY) => NegX,
+            (PosZ3, PosX) => NegZ,
+            (PosZ3, PosZ) => PosY,
+            (PosZ3, NegY) => PosX,
+            (PosZ3, NegX) => PosZ,
+            (PosZ3, NegZ) => NegY,
+            (NegY3, PosY) => NegY,
+            (NegY3, PosX) => NegZ,
+            (NegY3, PosZ) => NegX,
+            (NegY3, NegY) => PosY,
+            (NegY3, NegX) => PosZ,
+            (NegY3, NegZ) => PosX,
+            (NegX3, PosY) => NegX,
+            (NegX3, PosX) => NegY,
+            (NegX3, PosZ) => NegZ,
+            (NegX3, NegY) => PosX,
+            (NegX3, NegX) => PosY,
+            (NegX3, NegZ) => PosZ,
+            (NegZ3, PosY) => NegX,
+            (NegZ3, PosX) => PosZ,
+            (NegZ3, PosZ) => NegY,
+            (NegZ3, NegY) => PosX,
+            (NegZ3, NegX) => NegZ,
+            (NegZ3, NegZ) => PosY,
             _ => unreachable!(),
         }
     }
@@ -879,151 +930,152 @@ impl Rotation {
     #[must_use]
     pub fn face_angle(self, world_face: Direction) -> u8 {
         use Direction::*;
-        match (self.angle(), self.up(), world_face) {
-            (0, NegX, NegX) => 0,
-            (0, NegX, NegY) => 1,
-            (0, NegX, NegZ) => 3,
-            (0, NegX, PosX) => 2,
-            (0, NegX, PosY) => 1,
-            (0, NegX, PosZ) => 1,
-            (0, NegY, NegX) => 2,
-            (0, NegY, NegY) => 0,
-            (0, NegY, NegZ) => 2,
-            (0, NegY, PosX) => 2,
-            (0, NegY, PosY) => 0,
-            (0, NegY, PosZ) => 2,
-            (0, NegZ, NegX) => 1,
-            (0, NegZ, NegY) => 2,
-            (0, NegZ, NegZ) => 0,
-            (0, NegZ, PosX) => 3,
-            (0, NegZ, PosY) => 0,
-            (0, NegZ, PosZ) => 2,
-            (0, PosX, NegX) => 2,
-            (0, PosX, NegY) => 3,
-            (0, PosX, NegZ) => 1,
-            (0, PosX, PosX) => 0,
-            (0, PosX, PosY) => 3,
-            (0, PosX, PosZ) => 3,
-            (0, PosY, NegX) => 0,
-            (0, PosY, NegY) => 0,
-            (0, PosY, NegZ) => 0,
-            (0, PosY, PosX) => 0,
-            (0, PosY, PosY) => 0,
-            (0, PosY, PosZ) => 0,
-            (0, PosZ, NegX) => 3,
-            (0, PosZ, NegY) => 0,
-            (0, PosZ, NegZ) => 2,
-            (0, PosZ, PosX) => 1,
-            (0, PosZ, PosY) => 2,
-            (0, PosZ, PosZ) => 0,
-            (1, NegX, NegX) => 1,
-            (1, NegX, NegY) => 1,
-            (1, NegX, NegZ) => 3,
-            (1, NegX, PosX) => 1,
-            (1, NegX, PosY) => 1,
-            (1, NegX, PosZ) => 1,
-            (1, NegY, NegX) => 2,
-            (1, NegY, NegY) => 1,
-            (1, NegY, NegZ) => 2,
-            (1, NegY, PosX) => 2,
-            (1, NegY, PosY) => 3,
-            (1, NegY, PosZ) => 2,
-            (1, NegZ, NegX) => 1,
-            (1, NegZ, NegY) => 2,
-            (1, NegZ, NegZ) => 1,
-            (1, NegZ, PosX) => 3,
-            (1, NegZ, PosY) => 0,
-            (1, NegZ, PosZ) => 1,
-            (1, PosX, NegX) => 1,
-            (1, PosX, NegY) => 3,
-            (1, PosX, NegZ) => 1,
-            (1, PosX, PosX) => 1,
-            (1, PosX, PosY) => 3,
-            (1, PosX, PosZ) => 3,
-            (1, PosY, NegX) => 0,
-            (1, PosY, NegY) => 3,
-            (1, PosY, NegZ) => 0,
-            (1, PosY, PosX) => 0,
-            (1, PosY, PosY) => 1,
-            (1, PosY, PosZ) => 0,
-            (1, PosZ, NegX) => 3,
-            (1, PosZ, NegY) => 0,
-            (1, PosZ, NegZ) => 1,
-            (1, PosZ, PosX) => 1,
-            (1, PosZ, PosY) => 2,
-            (1, PosZ, PosZ) => 1,
-            (2, NegX, NegX) => 2,
-            (2, NegX, NegY) => 1,
-            (2, NegX, NegZ) => 3,
-            (2, NegX, PosX) => 0,
-            (2, NegX, PosY) => 1,
-            (2, NegX, PosZ) => 1,
-            (2, NegY, NegX) => 2,
-            (2, NegY, NegY) => 2,
-            (2, NegY, NegZ) => 2,
-            (2, NegY, PosX) => 2,
-            (2, NegY, PosY) => 2,
-            (2, NegY, PosZ) => 2,
-            (2, NegZ, NegX) => 1,
-            (2, NegZ, NegY) => 2,
-            (2, NegZ, NegZ) => 2,
-            (2, NegZ, PosX) => 3,
-            (2, NegZ, PosY) => 0,
-            (2, NegZ, PosZ) => 0,
-            (2, PosX, NegX) => 0,
-            (2, PosX, NegY) => 3,
-            (2, PosX, NegZ) => 1,
-            (2, PosX, PosX) => 2,
-            (2, PosX, PosY) => 3,
-            (2, PosX, PosZ) => 3,
-            (2, PosY, NegX) => 0,
-            (2, PosY, NegY) => 2,
-            (2, PosY, NegZ) => 0,
-            (2, PosY, PosX) => 0,
-            (2, PosY, PosY) => 2,
-            (2, PosY, PosZ) => 0,
-            (2, PosZ, NegX) => 3,
-            (2, PosZ, NegY) => 0,
-            (2, PosZ, NegZ) => 0,
-            (2, PosZ, PosX) => 1,
-            (2, PosZ, PosY) => 2,
-            (2, PosZ, PosZ) => 2,
-            (3, NegX, NegX) => 3,
-            (3, NegX, NegY) => 1,
-            (3, NegX, NegZ) => 3,
-            (3, NegX, PosX) => 3,
-            (3, NegX, PosY) => 1,
-            (3, NegX, PosZ) => 1,
-            (3, NegY, NegX) => 2,
-            (3, NegY, NegY) => 3,
-            (3, NegY, NegZ) => 2,
-            (3, NegY, PosX) => 2,
-            (3, NegY, PosY) => 1,
-            (3, NegY, PosZ) => 2,
-            (3, NegZ, NegX) => 1,
-            (3, NegZ, NegY) => 2,
-            (3, NegZ, NegZ) => 3,
-            (3, NegZ, PosX) => 3,
-            (3, NegZ, PosY) => 0,
-            (3, NegZ, PosZ) => 3,
-            (3, PosX, NegX) => 3,
-            (3, PosX, NegY) => 3,
-            (3, PosX, NegZ) => 1,
-            (3, PosX, PosX) => 3,
-            (3, PosX, PosY) => 3,
-            (3, PosX, PosZ) => 3,
-            (3, PosY, NegX) => 0,
-            (3, PosY, NegY) => 1,
-            (3, PosY, NegZ) => 0,
-            (3, PosY, PosX) => 0,
-            (3, PosY, PosY) => 3,
-            (3, PosY, PosZ) => 0,
-            (3, PosZ, NegX) => 3,
-            (3, PosZ, NegY) => 0,
-            (3, PosZ, NegZ) => 3,
-            (3, PosZ, PosX) => 1,
-            (3, PosZ, PosY) => 2,
-            (3, PosZ, PosZ) => 3,
+        use Rot::*;
+        match (self.0, world_face) {
+            (NegX0, NegX) => 0,
+            (NegX0, NegY) => 1,
+            (NegX0, NegZ) => 3,
+            (NegX0, PosX) => 2,
+            (NegX0, PosY) => 1,
+            (NegX0, PosZ) => 1,
+            (NegY0, NegX) => 2,
+            (NegY0, NegY) => 0,
+            (NegY0, NegZ) => 2,
+            (NegY0, PosX) => 2,
+            (NegY0, PosY) => 0,
+            (NegY0, PosZ) => 2,
+            (NegZ0, NegX) => 1,
+            (NegZ0, NegY) => 2,
+            (NegZ0, NegZ) => 0,
+            (NegZ0, PosX) => 3,
+            (NegZ0, PosY) => 0,
+            (NegZ0, PosZ) => 2,
+            (PosX0, NegX) => 2,
+            (PosX0, NegY) => 3,
+            (PosX0, NegZ) => 1,
+            (PosX0, PosX) => 0,
+            (PosX0, PosY) => 3,
+            (PosX0, PosZ) => 3,
+            (PosY0, NegX) => 0,
+            (PosY0, NegY) => 0,
+            (PosY0, NegZ) => 0,
+            (PosY0, PosX) => 0,
+            (PosY0, PosY) => 0,
+            (PosY0, PosZ) => 0,
+            (PosZ0, NegX) => 3,
+            (PosZ0, NegY) => 0,
+            (PosZ0, NegZ) => 2,
+            (PosZ0, PosX) => 1,
+            (PosZ0, PosY) => 2,
+            (PosZ0, PosZ) => 0,
+            (NegX1, NegX) => 1,
+            (NegX1, NegY) => 1,
+            (NegX1, NegZ) => 3,
+            (NegX1, PosX) => 1,
+            (NegX1, PosY) => 1,
+            (NegX1, PosZ) => 1,
+            (NegY1, NegX) => 2,
+            (NegY1, NegY) => 1,
+            (NegY1, NegZ) => 2,
+            (NegY1, PosX) => 2,
+            (NegY1, PosY) => 3,
+            (NegY1, PosZ) => 2,
+            (NegZ1, NegX) => 1,
+            (NegZ1, NegY) => 2,
+            (NegZ1, NegZ) => 1,
+            (NegZ1, PosX) => 3,
+            (NegZ1, PosY) => 0,
+            (NegZ1, PosZ) => 1,
+            (PosX1, NegX) => 1,
+            (PosX1, NegY) => 3,
+            (PosX1, NegZ) => 1,
+            (PosX1, PosX) => 1,
+            (PosX1, PosY) => 3,
+            (PosX1, PosZ) => 3,
+            (PosY1, NegX) => 0,
+            (PosY1, NegY) => 3,
+            (PosY1, NegZ) => 0,
+            (PosY1, PosX) => 0,
+            (PosY1, PosY) => 1,
+            (PosY1, PosZ) => 0,
+            (PosZ1, NegX) => 3,
+            (PosZ1, NegY) => 0,
+            (PosZ1, NegZ) => 1,
+            (PosZ1, PosX) => 1,
+            (PosZ1, PosY) => 2,
+            (PosZ1, PosZ) => 1,
+            (NegX2, NegX) => 2,
+            (NegX2, NegY) => 1,
+            (NegX2, NegZ) => 3,
+            (NegX2, PosX) => 0,
+            (NegX2, PosY) => 1,
+            (NegX2, PosZ) => 1,
+            (NegY2, NegX) => 2,
+            (NegY2, NegY) => 2,
+            (NegY2, NegZ) => 2,
+            (NegY2, PosX) => 2,
+            (NegY2, PosY) => 2,
+            (NegY2, PosZ) => 2,
+            (NegZ2, NegX) => 1,
+            (NegZ2, NegY) => 2,
+            (NegZ2, NegZ) => 2,
+            (NegZ2, PosX) => 3,
+            (NegZ2, PosY) => 0,
+            (NegZ2, PosZ) => 0,
+            (PosX2, NegX) => 0,
+            (PosX2, NegY) => 3,
+            (PosX2, NegZ) => 1,
+            (PosX2, PosX) => 2,
+            (PosX2, PosY) => 3,
+            (PosX2, PosZ) => 3,
+            (PosY2, NegX) => 0,
+            (PosY2, NegY) => 2,
+            (PosY2, NegZ) => 0,
+            (PosY2, PosX) => 0,
+            (PosY2, PosY) => 2,
+            (PosY2, PosZ) => 0,
+            (PosZ2, NegX) => 3,
+            (PosZ2, NegY) => 0,
+            (PosZ2, NegZ) => 0,
+            (PosZ2, PosX) => 1,
+            (PosZ2, PosY) => 2,
+            (PosZ2, PosZ) => 2,
+            (NegX3, NegX) => 3,
+            (NegX3, NegY) => 1,
+            (NegX3, NegZ) => 3,
+            (NegX3, PosX) => 3,
+            (NegX3, PosY) => 1,
+            (NegX3, PosZ) => 1,
+            (NegY3, NegX) => 2,
+            (NegY3, NegY) => 3,
+            (NegY3, NegZ) => 2,
+            (NegY3, PosX) => 2,
+            (NegY3, PosY) => 1,
+            (NegY3, PosZ) => 2,
+            (NegZ3, NegX) => 1,
+            (NegZ3, NegY) => 2,
+            (NegZ3, NegZ) => 3,
+            (NegZ3, PosX) => 3,
+            (NegZ3, PosY) => 0,
+            (NegZ3, PosZ) => 3,
+            (PosX3, NegX) => 3,
+            (PosX3, NegY) => 3,
+            (PosX3, NegZ) => 1,
+            (PosX3, PosX) => 3,
+            (PosX3, PosY) => 3,
+            (PosX3, PosZ) => 3,
+            (PosY3, NegX) => 0,
+            (PosY3, NegY) => 1,
+            (PosY3, NegZ) => 0,
+            (PosY3, PosX) => 0,
+            (PosY3, PosY) => 3,
+            (PosY3, PosZ) => 0,
+            (PosZ3, NegX) => 3,
+            (PosZ3, NegY) => 0,
+            (PosZ3, NegZ) => 3,
+            (PosZ3, PosX) => 1,
+            (PosZ3, PosY) => 2,
+            (PosZ3, PosZ) => 3,
             _ => unreachable!(),
         }
     }
@@ -1116,15 +1168,22 @@ impl Rotation {
     #[cfg(feature = "glam")]
     #[must_use]
     pub fn to_matrix(self) -> glam::Mat4 {
-        let up = self.reface(Direction::PosY).to_vec3();
-        let forward = self.reface(Direction::PosZ).to_vec3();
-        let right = self.reface(Direction::NegX).to_vec3();
-        glam::Mat4::from_cols(
+        let up = self.reface(Direction::PosY).to_vec3a();
+        let forward = self.reface(Direction::PosZ).to_vec3a();
+        let right = self.reface(Direction::NegX).to_vec3a();
+        Mat4::from_cols(
             right.extend(0.0),
             up.extend(0.0),
             forward.extend(0.0),
-            glam::Vec3::ZERO.extend(1.0),
+            Vec4::W,
         )
+    }
+
+    #[cfg(feature = "glam")]
+    #[inline]
+    #[must_use]
+    pub const fn to_quat(self) -> Quat {
+        Self::QUATS[self.0 as usize]
     }
 }
 

@@ -1,5 +1,8 @@
-use crate::Direction;
+// Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
 
+
+
+use crate::Direction;
 
 #[repr(C, align(4))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -15,7 +18,7 @@ impl Faces {
         right: Direction::PosX,
         forward: Direction::NegZ,
     };
-    
+
     pub const fn new(up: Direction, right: Direction, forward: Direction) -> Option<Self> {
         if up.is_orthogonal_to(right)
         && right.is_orthogonal_to(forward)
@@ -26,32 +29,32 @@ impl Faces {
             None
         }
     }
-    
+
     #[inline(always)]
     pub const fn up(self) -> Direction {
         self.up
     }
-    
+
     #[inline(always)]
     pub const fn right(self) -> Direction {
         self.right
     }
-    
+
     #[inline(always)]
     pub const fn forward(self) -> Direction {
         self.forward
     }
-    
+
     #[inline(always)]
     pub const fn down(self) -> Direction {
         self.up.invert()
     }
-    
+
     #[inline(always)]
     pub const fn left(self) -> Direction {
         self.right.invert()
     }
-    
+
     #[inline(always)]
     pub const fn backward(self) -> Direction {
         self.forward.invert()
