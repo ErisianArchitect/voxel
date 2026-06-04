@@ -13,7 +13,7 @@ pub struct Faces {
 }
 
 impl Faces {
-    pub(crate) const UNORIENTED: Self = Self {
+    pub(crate) const IDENTITY: Self = Self {
         up: Direction::PosY,
         right: Direction::PosX,
         forward: Direction::NegZ,

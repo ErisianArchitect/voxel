@@ -2,6 +2,8 @@
 
 
 
+#[cfg(feature = "glam")]
+use crate::CacheAlignedArray;
 use crate::{
     Axis, canonical::CanonicalGroup, direction::Direction, flip::Flip, orient_table,
     orientation_enum::Orient, pack_flip_and_rotation, polarity::Pol, rotation::Rotation,
@@ -100,7 +102,7 @@ macro_rules! transform_impls {
 
 macro_rules! orient_cycle_calc_body {
     ($lhs:ident, $rhs: ident, $function:ident) => {{
-        let mut dest = [Orientation::UNORIENTED; 4];
+        let mut dest = [Orientation::IDENTITY; 4];
         let mut cycler = $lhs;
         let mut count = 0u8;
         // TODO: I'm pretty sure this is wrong.
@@ -118,7 +120,7 @@ macro_rules! orient_cycle_calc_body {
 
 macro_rules! orient_cycle_body {
     ($function:ident($lhs:ident, $rhs:ident, $cycle:ident)) => {{
-        if $rhs.eq(Orientation::UNORIENTED) {
+        if $rhs.eq(Orientation::IDENTITY) {
             return $lhs;
         }
         let (cycle_count, orientations) = $lhs.$function($rhs);
@@ -136,7 +138,7 @@ macro_rules! canonical_table {
             }
             new_orient
         }
-        let mut table = CachePadded::new([Orientation::UNORIENTED; 192]);
+        let mut table = CachePadded::new([Orientation::IDENTITY; 192]);
         let mut orient_i = 0u8;
         while orient_i < 192 {
             let orient = unsafe { Orientation::from_u8_unchecked(orient_i) };
@@ -150,8 +152,8 @@ macro_rules! canonical_table {
 impl Orientation {
     pub(crate) const TOTAL_ORIENTATION_COUNT: u8 = /* Flip */ 8 * /* Angle */ 4 * /* Up */ 6;
     pub(crate) const ORIENTATION_MAX: u8 = Self::TOTAL_ORIENTATION_COUNT - 1;
-    pub const UNORIENTED: Orientation = Orientation::new(Rotation::new(Direction::PosY, 0), Flip::NONE);
-    pub const MIN: Self = Self::UNORIENTED;
+    pub const IDENTITY: Orientation = Orientation::new(Rotation::new(Direction::PosY, 0), Flip::NONE);
+    pub const MIN: Self = Self::IDENTITY;
     pub const MAX: Self = unsafe { Self::from_u8_unchecked(Self::ORIENTATION_MAX) };
     pub const ROTATE_X: Orientation = Rotation::ROTATE_X.orientation();
     pub const ROTATE_Y: Orientation = Rotation::ROTATE_Y.orientation();
@@ -166,32 +168,32 @@ impl Orientation {
     pub const Z_ROTATIONS: [Orientation; 4] = Self::ROTATE_Z.angles();
 
     pub const CANONICAL_X_GROUPS: [Orientation; 4] = [
-        Orientation::UNORIENTED,
+        Orientation::IDENTITY,
         Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY),
         Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ),
         Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ),
     ];
 
     pub const CANONICAL_Y_GROUPS: [Orientation; 4] = [
-        Orientation::UNORIENTED,
+        Orientation::IDENTITY,
         Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY),
         Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ),
         Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ),
     ];
 
     pub const CANONICAL_Z_GROUPS: [Orientation; 4] = [
-        Orientation::UNORIENTED,
+        Orientation::IDENTITY,
         Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ),
         Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ),
         Orientation::new(Rotation::new(Direction::NegY, 2), Flip::XY),
     ];
 
     const INVERT_TABLE: CachePadded<[Self; 192]> = {
-        let mut table = CachePadded::new([Self::UNORIENTED; 192]);
+        let mut table = CachePadded::new([Self::IDENTITY; 192]);
         let mut orient_int = 0u8;
         while orient_int < 192 {
             let orientation = unsafe { Self::from_u8_unchecked(orient_int) };
-            table.value[orient_int as usize] = Self::UNORIENTED.deorient(orientation);
+            table.value[orient_int as usize] = Self::IDENTITY.deorient(orientation);
             orient_int += 1;
         }
         table
@@ -204,7 +206,7 @@ impl Orientation {
     /// This array is ordered by [Rotation] first, then [Flip], allowing
     /// for cycling through rotations before flips.
     pub const ROTATION_ORDERED: CachePadded<[Self; 192]> = {
-        let mut order = CachePadded::new([Self::UNORIENTED; 192]);
+        let mut order = CachePadded::new([Self::IDENTITY; 192]);
         let mut flip = 0u8;
         let mut rotation = 0u8;
         let mut index = 0;
@@ -552,7 +554,7 @@ impl Orientation {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
         let angle3 = angle2.reorient(angle1);
-        [Orientation::UNORIENTED, angle1, angle2, angle3]
+        [Orientation::IDENTITY, angle1, angle2, angle3]
     }
 
     // verified (2025-12-28)
@@ -563,7 +565,7 @@ impl Orientation {
     pub const fn corner_angles(self) -> [Orientation; 3] {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
-        [Orientation::UNORIENTED, angle1, angle2]
+        [Orientation::IDENTITY, angle1, angle2]
     }
 
     #[must_use]
@@ -876,6 +878,11 @@ impl Orientation {
         self.reface(Direction::PosX)
     }
 
+    /// Determines which orientation must be applied to `self` to get `orientation`.
+    pub const fn difference(self, orientation: Self) -> Self {
+        self.invert().reorient(orientation)
+    }
+
     /// Reorient `self` with `orientation`.
     #[must_use]
     pub const fn reorient(self, orientation: Self) -> Self {
@@ -1055,6 +1062,10 @@ impl Orientation {
         }
     }
 
+    pub const fn conjugate(self, orientation: Orientation) -> Self {
+        self.invert().reorient(orientation).reorient(self)
+    }
+
     /// Returns the orientation that can be applied to deorient by [self].
     #[must_use]
     #[inline]
@@ -1177,21 +1188,45 @@ impl Orientation {
     }
 
     #[cfg(feature = "glam")]
+    #[inline]
     #[must_use]
-    pub fn to_matrix(self) -> glam::Mat4 {
-        let flip = self.flip();
-        let rotation = self.rotation();
-        let scale = flip.to_scale_vec3a();
-        let up = rotation.reface(Direction::PosY).to_vec3a();
-        let forward = rotation.reface(Direction::PosZ).to_vec3a();
-        let right = rotation.reface(Direction::PosX).to_vec3a();
-        
-        glam::Mat4::from_cols(
-            (right * scale).extend(0.0),
-            (up * scale).extend(0.0),
-            (forward * scale).extend(0.0),
-            glam::Vec4::W,
-        )
+    pub const fn to_matrix(self) -> glam::Mat4 {
+        const MATRICES: CachePadded<[glam::Mat4; 192]> = {
+            pub const fn to_matrix(orient: Orientation) -> glam::Mat4 {
+                let flip = orient.flip();
+                let rotation = orient.rotation();
+                let scale = flip.to_scale_vec3();
+                let up = rotation.reface(Direction::PosY).to_vec3();
+                let forward = rotation.reface(Direction::PosZ).to_vec3();
+                let right = rotation.reface(Direction::PosX).to_vec3();
+                glam::Mat4::from_cols(
+                    glam::Vec4::new(right.x * scale.x, right.y * scale.y, right.z * scale.z, 0.0),
+                    glam::Vec4::new(up.x * scale.x, up.y * scale.y, up.z * scale.z, 0.0),
+                    glam::Vec4::new(forward.x * scale.x, forward.y * scale.y, forward.z * scale.z, 0.0),
+                    glam::Vec4::W,
+                )
+            }
+            let mut matrices = [glam::Mat4::IDENTITY; 192];
+            let mut i = 0u8;
+            while i < 192 {
+                let orient = unsafe { Orientation::from_u8_unchecked(i) };
+                matrices[i as usize] = to_matrix(orient);
+                i += 1;
+            }
+            CachePadded {
+                value: matrices,
+            }
+        };
+        MATRICES.value[self.0 as usize]
+    }
+
+    #[cfg(feature = "glam")]
+    #[inline]
+    #[must_use]
+    pub fn transform_vec3(self, v: glam::Vec3) -> glam::Vec3 {
+        use glam::Vec4Swizzles;
+        let mat = self.to_matrix();
+        (mat * v.extend(1.0)).xyz()
     }
 
     #[must_use]
@@ -1215,12 +1250,50 @@ impl Orientation {
 
     #[must_use]
     #[inline(always)]
+    pub const fn is_chiral(self) -> bool {
+        !self.flip().is_mesh_inside_out()
+    }
+
+    #[must_use]
+    #[inline(always)]
     pub const fn display(self, short: bool) -> OrientDisplay {
         if short {
             OrientDisplay::Short(OrientShortDisplay(self))
         } else {
             OrientDisplay::Long(OrientLongDisplay(self))
         }
+    }
+}
+
+impl std::ops::Neg for Orientation {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        self.invert()
+    }
+}
+
+impl std::ops::Mul<Orientation> for Orientation {
+    type Output = Self;
+
+    fn mul(self, rhs: Orientation) -> Self::Output {
+        self.reorient(rhs)
+    }
+}
+
+impl std::ops::Div<Orientation> for Orientation {
+    type Output = Self;
+
+    fn div(self, rhs: Orientation) -> Self::Output {
+        self.deorient(rhs)
+    }
+}
+
+impl std::ops::Sub<Orientation> for Orientation {
+    type Output = Self;
+
+    fn sub(self, rhs: Orientation) -> Self::Output {
+        self.difference(rhs)
     }
 }
 
@@ -1484,7 +1557,7 @@ mod tests {
                 let reorient = base.reorient(orient);
                 let deorient = reorient.deorient(orient);
                 assert_eq!(base, deorient);
-                if orient != Orientation::UNORIENTED {
+                if orient != Orientation::IDENTITY {
                     assert_ne!(base, reorient);
                     assert_ne!(reorient, deorient);
                 }
@@ -1508,6 +1581,78 @@ mod tests {
                     assert_eq!(base, deoriented);
                     assert_eq!(base, deoriented2);
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn difference_test() {
+        for lhs in Orientation::iter() {
+            for rhs in Orientation::iter() {
+                let difference = lhs.difference(rhs);
+                assert_eq!(lhs.reorient(difference), rhs);
+            }
+        }
+    }
+
+    #[test]
+    fn conjugate_test() {
+        for lhs in Orientation::iter() {
+            for rhs in Orientation::iter() {
+                let conjugation = lhs.conjugate(rhs);
+                assert_eq!(lhs.reorient(conjugation), rhs.reorient(lhs));
+            }
+        }
+        println!("conjugate test passed.")
+    }
+
+    #[test]
+    fn kernel_mapping() {
+        for lhs in Orientation::iter() {
+            for rhs in Orientation::iter() {
+                let group_l = lhs.canonical_group_x();
+                let group_r = rhs.canonical_group_x();
+                let result = lhs.reorient(rhs);
+                let group_result = result.canonical_group_x();
+                println!("{group_l:?} -> {group_r:?} -> {group_result:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn formal_verify() {
+        for base in Orientation::iter() {
+            for orientation in Orientation::iter() {
+                let conjugate = base.conjugate(orientation);
+                let local1 = base.reorient_local(orientation);
+                let local2 = orientation.reorient(base);
+                let local3 = base.reorient(conjugate);
+                assert_eq!(local1, local2);
+                assert_eq!(local2, local3);
+                let l_to_r = base.reorient(orientation);
+                let r_to_l = l_to_r.deorient(orientation);
+                assert_eq!(base, r_to_l);
+                let l_to_r = base.reorient_local(orientation);
+                let r_to_l = l_to_r.deorient_local(orientation);
+                assert_eq!(base, r_to_l);
+                let l_to_r = base.reorient_canonical_x(orientation);
+                let r_to_l = l_to_r.deorient_canonical_x(orientation);
+                assert!(base.is_equivalent(r_to_l));
+                let l_to_r = base.reorient_canonical_y(orientation);
+                let r_to_l = l_to_r.deorient_canonical_y(orientation);
+                assert!(base.is_equivalent(r_to_l));
+                let l_to_r = base.reorient_canonical_z(orientation);
+                let r_to_l = l_to_r.deorient_canonical_z(orientation);
+                assert!(base.is_equivalent(r_to_l));
+                let l_to_r = base.reorient_canonical_x_local(orientation);
+                let r_to_l = l_to_r.deorient_canonical_x_local(orientation);
+                assert!(base.is_equivalent(r_to_l));
+                let l_to_r = base.reorient_canonical_y_local(orientation);
+                let r_to_l = l_to_r.deorient_canonical_y_local(orientation);
+                assert!(base.is_equivalent(r_to_l));
+                let l_to_r = base.reorient_canonical_z_local(orientation);
+                let r_to_l = l_to_r.deorient_canonical_z_local(orientation);
+                assert!(base.is_equivalent(r_to_l));
             }
         }
     }

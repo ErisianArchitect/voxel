@@ -62,7 +62,7 @@ impl Direction {
 
     // verified(2025-12-28)
     /// All directions, ordered for a flood fill algorithm.
-    /// ```no_run
+    /// ```rust, ignore
     /// [PosY, NegY, PosX, NegX, PosZ, NegZ]
     /// ```
     pub const FLOOD: [Direction; 6] = [

@@ -74,7 +74,7 @@ pub enum Rot {
 
 impl Rot {
     /// The identity rotation (unrotated).
-    pub const UNROTATED: Self = Self::PosY0;
+    pub const IDENTITY: Self = Self::PosY0;
     /// The rotation value with the maximum discriminant value.
     pub const MAX: Self = Self::NegZ3;
 
@@ -129,6 +129,14 @@ macro_rules! rotate_coord_fns {
                 #[must_use]
                 pub const fn [<rotate_coord_ $type>](self, (x, y, z): ($type, $type, $type)) -> ($type, $type, $type) {
                     use Rot::*;
+                    #[repr(u8)]
+                    #[derive(Clone, Copy)]
+                    enum XYZ {
+                        X = 0,
+                        Y = 1,
+                        Z = 2,
+                    }
+                    use XYZ::{X, Y, Z};
                     match self.0 {
                         PosY0 /* (0, PosY) */ => (x, y, z), // Default rotation, no change.
                         PosY1 /* (1, PosY) */ => (z, y, -x),
@@ -190,7 +198,7 @@ impl Rotation {
         Quat::from_xyzw(0.5, -0.5, 0.5, -0.5),
     ];
 
-    pub const MIN: Self = Self(Rot::UNROTATED);
+    pub const MIN: Self = Self(Rot::IDENTITY);
     // only 24 valid rotations (6 sides * 4 angles)
     pub const MAX: Self = Self(Rot::MAX);
     
@@ -199,7 +207,7 @@ impl Rotation {
     /// ((up << UP_SHIFT) & UP_MASK) | (angle & ANGLE_MASK)
     pub(crate) const UP_SHIFT: u32 = 2;
     
-    pub const UNROTATED: Rotation = Rotation::new(Direction::PosY, 0);
+    pub const IDENTITY: Rotation = Rotation::new(Direction::PosY, 0);
     pub const ROTATE_X: Rotation = Rotation::new(Direction::PosZ, 0);
     pub const ROTATE_X_CCW: Rotation = Self::ROTATE_X;
     pub const ROTATE_X_CW: Rotation = Self::ROTATE_X.invert();
@@ -362,7 +370,7 @@ impl Rotation {
         let angle2 = angle1.reorient(angle1);
         let angle3 = angle2.reorient(angle1);
         [
-            Self::UNROTATED,
+            Self::IDENTITY,
             angle1,
             angle2,
             angle3,
@@ -378,7 +386,7 @@ impl Rotation {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
         [
-            Self::UNROTATED,
+            Self::IDENTITY,
             angle1,
             angle2
         ]
@@ -454,7 +462,7 @@ impl Rotation {
     #[inline(always)]
     pub const fn faces(self) -> Faces {
         const UP_FORWARD_RIGHT_TABLE: CachePadded<[Faces; 24]> = {
-            let mut table = CachePadded::new([Faces::UNORIENTED; 24]);
+            let mut table = CachePadded::new([Faces::IDENTITY; 24]);
             let mut rot_i = 0u8;
             while rot_i < 24 {
                 let rot = unsafe { Rotation::from_u8_unchecked(rot_i) };
@@ -743,8 +751,7 @@ impl Rotation {
     }
 
     pub const fn difference(self, rotation: Self)  -> Self {
-        let unrotater = self.invert();
-        rotation.reorient(unrotater)
+        self.invert().reorient(rotation)
     }
     
     // verified (2025-12-28): reface and source_face are symmetrical.
@@ -920,7 +927,6 @@ impl Rotation {
             (NegZ3, NegY) => PosX,
             (NegZ3, NegX) => NegZ,
             (NegZ3, NegZ) => PosY,
-            _ => unreachable!(),
         }
     }
 
@@ -1076,7 +1082,6 @@ impl Rotation {
             (PosZ3, PosX) => 1,
             (PosZ3, PosY) => 2,
             (PosZ3, PosZ) => 3,
-            _ => unreachable!(),
         }
     }
 
@@ -1112,13 +1117,17 @@ impl Rotation {
         };
         rot
     }
+
+    pub const fn conjugate(self, rotation: Self) -> Self {
+        self.invert().reorient(rotation).reorient(self)
+    }
     
     // verified (2025-12-28)
     /// Creates a [Rotation] that when rotated by the original will create the base [Rotation].
     #[must_use]
     #[inline]
     pub const fn invert(self) -> Self {
-        Self::UNROTATED.deorient(self)
+        Self::IDENTITY.deorient(self)
     }
 
     #[must_use]
@@ -1293,6 +1302,21 @@ impl std::fmt::Display for RotationDisplay {
         match self {
             RotationDisplay::Short(disp) => write!(f, "{disp}"),
             RotationDisplay::Long(disp) => write!(f, "{disp}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod rotation_tests {
+    use super::*;
+
+    #[test]
+    fn difference_test() {
+        for lhs in Rotation::iter() {
+            for rhs in Rotation::iter() {
+                let difference = lhs.difference(rhs);
+                assert_eq!(lhs.reorient(difference), rhs);
+            }
         }
     }
 }

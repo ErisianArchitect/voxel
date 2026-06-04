@@ -236,6 +236,25 @@ impl Flip {
     /* Z Axis */ [Group0, Group1, Group2, Group3, Group0, Group1, Group2, Group3],
     ];
 
+    const U32_SIGN_BITMASKS: [(u32, u32, u32); 8] = {
+        const fn sign_bit(flip: bool) -> u32 {
+            const SIGN_BITS: [u32; 2] = [0, 2u32.pow(31)];
+            SIGN_BITS[flip as usize]
+        }
+        let mut masks = [(0, 0, 0); 8];
+        let mut i = 0;
+        while i < 8 {
+            let f = unsafe { Flip::from_u8_unchecked(i as u8) };
+            masks[i] = (
+                sign_bit(f.x()),
+                sign_bit(f.y()),
+                sign_bit(f.z()),
+            );
+            i += 1;
+        }
+        masks
+    };
+
     #[inline]
     pub const fn new(x: bool, y: bool, z: bool) -> Self {
         Self(unsafe { FlipState::from_u8_unchecked((x as u8) | ((y as u8) << 1) | ((z as u8) << 2)) })
@@ -282,17 +301,29 @@ impl Flip {
     }
 
     pub fn flip_coord<T: Copy + std::ops::Neg<Output = T>, C: Into<(T, T, T)> + From<(T, T, T)>>(self, value: C) -> C {
-        let (mut x, mut y, mut z): (T, T, T) = value.into();
-        if self.x() {
-            x = -x;
-        }
-        if self.y() {
-            y = -y;
-        }
-        if self.z() {
-            z = -z;
-        }
-        C::from((x, y, z))
+        let (x, y, z): (T, T, T) = value.into();
+        C::from(match self.0 {
+            FlipState::None => (x, y, z),
+            FlipState::X => (-x, y, z),
+            FlipState::Y => (x, -y, z),
+            FlipState::Z => (x, y, -z),
+            FlipState::XY => (-x, -y, z),
+            FlipState::XZ => (-x, y, -z),
+            FlipState::YZ => (x, -y, -z),
+            FlipState::XYZ => (-x, -y, -z),
+        })
+    }
+
+    #[cfg(feature = "glam")]
+    #[must_use]
+    #[inline]
+    pub const fn flip_vec3(self, v: glam::Vec3) -> glam::Vec3 {
+        let (x, y, z) = Self::U32_SIGN_BITMASKS[self.0 as usize];
+        glam::Vec3::new(
+            f32::from_bits(v.x.to_bits() ^ x),
+            f32::from_bits(v.y.to_bits() ^ y),
+            f32::from_bits(v.z.to_bits() ^ z),
+        )
     }
     
     flip_coord_impls!(
@@ -363,9 +394,9 @@ impl Flip {
 
     #[cfg(feature = "glam")]
     #[inline]
-    pub fn to_scale(self) -> glam::Vec3 {
+    pub const fn to_scale(self) -> glam::Vec3 {
         #[inline(always)]
-        fn select_scale(flipped: bool) -> f32 {
+        const fn select_scale(flipped: bool) -> f32 {
             if flipped {
                 -1.0
             } else {
@@ -381,9 +412,27 @@ impl Flip {
 
     #[cfg(feature = "glam")]
     #[inline]
-    pub fn to_scale_vec3a(self) -> glam::Vec3A {
+    pub const fn to_scale_vec3(self) -> glam::Vec3 {
         #[inline(always)]
-        fn select_scale(flipped: bool) -> f32 {
+        const fn select_scale(flipped: bool) -> f32 {
+            if flipped {
+                -1.0
+            } else {
+                1.0
+            }
+        }
+        glam::vec3(
+            select_scale(self.x()),
+            select_scale(self.y()),
+            select_scale(self.z()),
+        )
+    }
+
+    #[cfg(feature = "glam")]
+    #[inline]
+    pub const fn to_scale_vec3a(self) -> glam::Vec3A {
+        #[inline(always)]
+        const fn select_scale(flipped: bool) -> f32 {
             if flipped {
                 -1.0
             } else {
@@ -399,9 +448,14 @@ impl Flip {
 
     #[cfg(feature = "glam")]
     #[inline]
-    pub fn to_matrix(self) -> glam::Mat4 {
+    pub const fn to_matrix(self) -> glam::Mat4 {
         let scale = self.to_scale();
-        glam::Mat4::from_scale(scale)
+        glam::Mat4::from_cols(
+            glam::Vec4::new(scale.x, 0.0, 0.0, 0.0),
+            glam::Vec4::new(0.0, scale.y, 0.0, 0.0),
+            glam::Vec4::new(0.0, 0.0, scale.z, 0.0),
+            glam::Vec4::W,
+        )
     }
 
     #[must_use]

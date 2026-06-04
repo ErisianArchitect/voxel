@@ -18,7 +18,7 @@
 //! for canonicalization based on [Flip] state of the orientation
 //! being canonicalized, and the axis of canonicalization. These
 //! are Canonicalization Orientations. The Group0 is always
-//! [Orientation::UNORIENTED].
+//! [Orientation::IDENTITY].
 //!
 //! # Axial Group Cayley Table
 //!
@@ -49,6 +49,13 @@ pub enum CanonicalGroup {
 }
 
 impl CanonicalGroup {
+    pub const GROUPS: [Self; 4] = [
+        Self::Group0,
+        Self::Group1,
+        Self::Group2,
+        Self::Group3,
+    ];
+
     #[must_use]
     #[inline(always)]
     pub const fn from_u8(group: u8) -> Self {
@@ -66,7 +73,7 @@ impl CanonicalGroup {
     #[inline]
     pub const fn orient_x(self) -> Orientation {
         match self {
-            CanonicalGroup::Group0 => Orientation::UNORIENTED,
+            CanonicalGroup::Group0 => Orientation::IDENTITY,
             CanonicalGroup::Group1 => XY_ORIENT,
             CanonicalGroup::Group2 => XZ_ORIENT,
             CanonicalGroup::Group3 => YZ_ORIENT,
@@ -77,7 +84,7 @@ impl CanonicalGroup {
     #[inline]
     pub const fn orient_y(self) -> Orientation {
         match self {
-            CanonicalGroup::Group0 => Orientation::UNORIENTED,
+            CanonicalGroup::Group0 => Orientation::IDENTITY,
             CanonicalGroup::Group1 => XY_ORIENT,
             CanonicalGroup::Group2 => YZ_ORIENT,
             CanonicalGroup::Group3 => XZ_ORIENT,
@@ -88,11 +95,17 @@ impl CanonicalGroup {
     #[inline]
     pub const fn orient_z(self) -> Orientation {
         match self {
-            CanonicalGroup::Group0 => Orientation::UNORIENTED,
+            CanonicalGroup::Group0 => Orientation::IDENTITY,
             CanonicalGroup::Group1 => XZ_ORIENT,
             CanonicalGroup::Group2 => YZ_ORIENT,
             CanonicalGroup::Group3 => XY_ORIENT,
         }
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn cycle(self, count: i32) -> Self {
+        Self::GROUPS[((self as i64 + count as i64) % 4) as usize]
     }
 
     #[must_use]
@@ -105,5 +118,32 @@ impl CanonicalGroup {
     #[inline(always)]
     pub const fn ne(self, other: Self) -> bool {
         self as u8 != other as u8
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn iter() -> CanonicalGroupIter {
+        CanonicalGroupIter {
+            group_index: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CanonicalGroupIter {
+    group_index: u8,
+}
+
+impl Iterator for CanonicalGroupIter {
+    type Item = CanonicalGroup;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.group_index >= 4 {
+            None
+        } else {
+            let group = unsafe { *CanonicalGroup::GROUPS.get_unchecked(self.group_index as usize) };
+            self.group_index += 1;
+            Some(group)
+        }
     }
 }
