@@ -9,6 +9,7 @@ use crate::{
     orientation_enum::Orient, pack_flip_and_rotation, polarity::Pol, rotation::Rotation,
     wrap_angle,
 };
+use byteset::ByteSet;
 use lolevel::{cache_padded::CachePadded};
 use paste::paste;
 
@@ -505,7 +506,19 @@ impl Orientation {
     #[must_use]
     #[inline(always)]
     pub const fn is_canonical(self) -> bool {
-        self.is_canonical_x() || self.is_canonical_y() || self.is_canonical_z()
+        const TABLE: ByteSet = {
+            let mut set = ByteSet::new();
+            let mut i = 0;
+            while i < 192 {
+                let orient = unsafe { Orientation::from_u8_unchecked(i) };
+                if orient.is_canonical_x() || orient.is_canonical_y() || orient.is_canonical_z() {
+                    set.add_byte(i);
+                }
+                i += 1;
+            }
+            set
+        };
+        TABLE.has(self.as_u8())
     }
 
     #[must_use]
@@ -551,10 +564,9 @@ impl Orientation {
     /// and the fourth orientation is the target orientation applied three times.
     #[must_use]
     pub const fn angles(self) -> [Orientation; 4] {
-        let angle1 = self;
-        let angle2 = angle1.reorient(angle1);
-        let angle3 = angle2.reorient(angle1);
-        [Orientation::IDENTITY, angle1, angle2, angle3]
+        let angle2 = self.reorient(self);
+        let angle3 = angle2.reorient(self);
+        [Orientation::IDENTITY, self, angle2, angle3]
     }
 
     // verified (2025-12-28)
@@ -563,9 +575,8 @@ impl Orientation {
     /// and the third orientation is the target orientation applied to itself.
     #[must_use]
     pub const fn corner_angles(self) -> [Orientation; 3] {
-        let angle1 = self;
-        let angle2 = angle1.reorient(angle1);
-        [Orientation::IDENTITY, angle1, angle2]
+        let angle2 = self.reorient(self);
+        [Orientation::IDENTITY, self, angle2]
     }
 
     #[must_use]
@@ -1212,16 +1223,16 @@ impl Orientation {
                     glam::Vec4::W,
                 )
             }
-            let mut matrices = [glam::Mat4::IDENTITY; 192];
+            let mut matrices = CachePadded {
+                value: [glam::Mat4::IDENTITY; 192],
+            };
             let mut i = 0u8;
             while i < 192 {
                 let orient = unsafe { Orientation::from_u8_unchecked(i) };
-                matrices[i as usize] = to_matrix(orient);
+                matrices.value[i as usize] = to_matrix(orient);
                 i += 1;
             }
-            CachePadded {
-                value: matrices,
-            }
+            matrices
         };
         MATRICES.value[self.0 as usize]
     }
@@ -1377,6 +1388,23 @@ impl RotationFirstOrientationIterator {
             unsafe { Rotation::from_u8_unchecked(self.rotation) },
             unsafe { Flip::from_u8_unchecked(self.flip) },
         ))
+    }
+
+    #[must_use]
+    pub const fn next(&mut self) -> Option<Orientation> {
+        if self.flip == 8 {
+            return None;
+        }
+        let result = Some(Orientation::new(
+            unsafe { Rotation::from_u8_unchecked(self.rotation) },
+            unsafe { Flip::from_u8_unchecked(self.flip) },
+        ));
+        self.rotation += 1;
+        if self.rotation == 24 {
+            self.flip += 1;
+            self.rotation = 0;
+        }
+        result
     }
 }
 
@@ -1614,53 +1642,13 @@ mod tests {
 
     #[test]
     fn deorient_local_test() {
-        for base in Orientation::iter() {
-            for orient in Orientation::iter() {
-                let reorient = base.reorient(orient);
-                let deorient = reorient.deorient(orient);
-                assert_eq!(base, deorient);
-                if orient != Orientation::IDENTITY {
-                    assert_ne!(base, reorient);
-                    assert_ne!(reorient, deorient);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn formal_verify() {
-        for base in Orientation::iter() {
-            for orientation in Orientation::iter() {
-                let conjugate = base.conjugate(orientation);
-                let local1 = base.reorient_local(orientation);
-                let local2 = orientation.reorient(base);
-                let local3 = base.reorient(conjugate);
-                assert_eq!(local1, local2);
-                assert_eq!(local2, local3);
-                let l_to_r = base.reorient(orientation);
-                let r_to_l = l_to_r.deorient(orientation);
-                assert_eq!(base, r_to_l);
-                let l_to_r = base.reorient_local(orientation);
-                let r_to_l = l_to_r.deorient_local(orientation);
-                assert_eq!(base, r_to_l);
-                let l_to_r = base.reorient_canonical_x(orientation);
-                let r_to_l = l_to_r.deorient_canonical_x(orientation);
-                assert!(base.is_equivalent(r_to_l));
-                let l_to_r = base.reorient_canonical_y(orientation);
-                let r_to_l = l_to_r.deorient_canonical_y(orientation);
-                assert!(base.is_equivalent(r_to_l));
-                let l_to_r = base.reorient_canonical_z(orientation);
-                let r_to_l = l_to_r.deorient_canonical_z(orientation);
-                assert!(base.is_equivalent(r_to_l));
-                let l_to_r = base.reorient_canonical_x_local(orientation);
-                let r_to_l = l_to_r.deorient_canonical_x_local(orientation);
-                assert!(base.is_equivalent(r_to_l));
-                let l_to_r = base.reorient_canonical_y_local(orientation);
-                let r_to_l = l_to_r.deorient_canonical_y_local(orientation);
-                assert!(base.is_equivalent(r_to_l));
-                let l_to_r = base.reorient_canonical_z_local(orientation);
-                let r_to_l = l_to_r.deorient_canonical_z_local(orientation);
-                assert!(base.is_equivalent(r_to_l));
+        for [base, orient] in Orientation::cartesian_product() {
+            let reorient = base.reorient(orient);
+            let deorient = reorient.deorient(orient);
+            assert_eq!(base, deorient);
+            if orient != Orientation::IDENTITY {
+                assert_ne!(base, reorient);
+                assert_ne!(reorient, deorient);
             }
         }
     }

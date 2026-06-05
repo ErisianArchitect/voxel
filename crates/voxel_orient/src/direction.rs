@@ -22,7 +22,7 @@ use glam::{Vec3, Vec3A, IVec3};
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
-    // The value of the discriminants is important! Do not change! (2025-12-28)
+    // IMPORTANT: The value of the discriminants is important! Do not change! (2025-12-28)
     /// Left
     NegX = 4,
     /// Down
@@ -94,30 +94,47 @@ impl Direction {
     /// Invert the [Direction]. (`NegX` becomes `PosX`, `PosX` becomes `NegX`, etc.)
     #[inline]
     pub const fn invert(self) -> Self {
-        match self {
-            Direction::NegX => Direction::PosX,
-            Direction::NegY => Direction::PosY,
-            Direction::NegZ => Direction::PosZ,
-            Direction::PosX => Direction::NegX,
-            Direction::PosY => Direction::NegY,
-            Direction::PosZ => Direction::NegZ,
-        }
+        use Direction::*;
+        const INVERTS: [Direction; 6] = [
+            NegY,
+            NegX,
+            NegZ,
+            PosY,
+            PosX,
+            PosZ,
+        ];
+        INVERTS[self as usize]
     }
 
     // verified (2025-12-28)
     /// Flips the [Direction] based on [Flip].
     #[inline]
     pub const fn flip(self, flip: Flip) -> Self {
-        use Direction::*;
-        match self {
-            NegX if flip.x() => PosX,
-            NegY if flip.y() => PosY,
-            NegZ if flip.z() => PosZ,
-            PosX if flip.x() => NegX,
-            PosY if flip.y() => NegY,
-            PosZ if flip.z() => NegZ,
-            _ => self
-        }
+        const TABLE: [[Direction; 8]; 6] = {
+            let mut table = [[Direction::PosY; 8]; 6];
+            let mut dir_i = 0;
+            while dir_i < 6 {
+                let mut flip_i = 0;
+                while flip_i < 8 {
+                    let dir = Direction::INDEX_ORDER[dir_i];
+                    let flip = unsafe { Flip::from_u8_unchecked(flip_i) };
+                    use Direction::*;
+                    table[dir_i][flip_i as usize] = match dir {
+                        NegX if flip.x() => PosX,
+                        NegY if flip.y() => PosY,
+                        NegZ if flip.z() => PosZ,
+                        PosX if flip.x() => NegX,
+                        PosY if flip.y() => NegY,
+                        PosZ if flip.z() => NegZ,
+                        _ => dir
+                    };
+                    flip_i += 1;
+                }
+                dir_i += 1;
+            }
+            table
+        };
+        TABLE[self as usize][flip.0 as usize]
     }
 
     // verified (2025-12-28)
@@ -129,53 +146,92 @@ impl Direction {
 
     #[inline]
     pub const fn is_orthogonal_to(self, direction: Self) -> bool {
-        self.axis() as u8 != direction.axis() as u8
+        #[repr(C, align(8))]
+        #[derive(Clone, Copy)]
+        struct BitMask([u8; 8]);
+        impl BitMask {
+            #[must_use]
+            #[inline(always)]
+            const fn get(self, lhs: Direction, rhs: Direction) -> bool {
+                self.0[lhs as usize] & (1u8 << (rhs as u32)) != 0
+            }
+
+            const fn set(&mut self, lhs: Direction, rhs: Direction, value: bool) {
+                if value {
+                    self.0[lhs as usize] |= 1 << rhs as u32;
+                } else {
+                    self.0[lhs as usize] &= !(1 << rhs as u32);
+                }
+            }
+        }
+        const MASK: BitMask = {
+            let mut mask = BitMask([0; 8]);
+            let mut li = 0;
+            while li < 6 {
+                let mut ri = 0;
+                while ri < 6 {
+                    let lhs = Direction::INDEX_ORDER[li];
+                    let rhs = Direction::INDEX_ORDER[ri];
+                    mask.set(lhs, rhs, lhs.axis() as u8 != rhs.axis() as u8);
+                    ri += 1;
+                }
+                li += 1;
+            }
+            mask
+        };
+        MASK.get(self, direction)
     }
 
     // verified (2025-12-28)
     /// Gets the [Axis] of the [Direction]
     #[inline]
     pub const fn axis(self) -> Axis {
-        use Direction::*;
-        match self {
-            NegX | PosX => Axis::X,
-            NegY | PosY => Axis::Y,
-            NegZ | PosZ => Axis::Z,
-        }
+        const AXES: [Axis; 6] = [
+            Axis::Y,
+            Axis::X,
+            Axis::Z,
+            Axis::Y,
+            Axis::X,
+            Axis::Z,
+        ];
+        AXES[self as usize]
     }
 
     #[inline]
     pub const fn polarity(self) -> Pol {
-        use Direction::*;
-        match self {
-            NegX | NegY | NegZ => Pol::Neg,
-            PosX | PosY | PosZ => Pol::Pos,
-        }
+        const POLARITIES: [Pol; 6] = [
+            Pol::Pos,
+            Pol::Pos,
+            Pol::Pos,
+            Pol::Neg,
+            Pol::Neg,
+            Pol::Neg,
+        ];
+        POLARITIES[self as usize]
     }
 
     #[inline]
     pub const fn polar_axis(self) -> (Pol, Axis) {
-        use Direction::*;
-        match self {
-            NegX => (Pol::Neg, Axis::X),
-            NegY => (Pol::Neg, Axis::Y),
-            NegZ => (Pol::Neg, Axis::Z),
-            PosX => (Pol::Pos, Axis::X),
-            PosY => (Pol::Pos, Axis::Y),
-            PosZ => (Pol::Pos, Axis::Z),
-        }
+        const TABLE: [(Pol, Axis); 6] = [
+            (Pol::Pos, Axis::Y),
+            (Pol::Pos, Axis::X),
+            (Pol::Pos, Axis::Z),
+            (Pol::Neg, Axis::Y),
+            (Pol::Neg, Axis::X),
+            (Pol::Neg, Axis::Z),
+        ];
+        TABLE[self as usize]
     }
 
     #[inline]
     pub const fn from_polar_axis(polarity: Pol, axis: Axis) -> Self {
-        match (polarity, axis) {
-            (Pol::Neg, Axis::X) => Self::NegX,
-            (Pol::Neg, Axis::Y) => Self::NegY,
-            (Pol::Neg, Axis::Z) => Self::NegZ,
-            (Pol::Pos, Axis::X) => Self::PosX,
-            (Pol::Pos, Axis::Y) => Self::PosY,
-            (Pol::Pos, Axis::Z) => Self::PosZ,
-        }
+        use Direction::*;
+        const TABLE: [[Direction; 2]; 3] = [
+            [NegX, PosX],
+            [NegY, PosY],
+            [NegZ, PosZ],
+        ];
+        TABLE[axis as usize][polarity as usize]
     }
 
     // verified (2026-1-5)
@@ -195,14 +251,7 @@ impl Direction {
     // This order must not change! Certain code depends on it.
     #[inline]
     pub const fn rotation_discriminant(self) -> u8 {
-        match self {
-            Direction::PosY => 0,
-            Direction::PosX => 1,
-            Direction::PosZ => 2,
-            Direction::NegY => 3,
-            Direction::NegX => 4,
-            Direction::NegZ => 5,
-        }
+        self as u8
     }
 
     #[inline]

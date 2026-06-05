@@ -25,3 +25,4 @@ paste.workspace = true
 glam = { workspace = true, optional = true }
 lolevel.workspace = true
 isit.workspace = true
+byteset.workspace = true

@@ -45,6 +45,7 @@ struct DirectionTable {
     table: [Direction; 6],
     pad: u16,
 }
+const _: () = isit::assert_same_size_align::<DirectionTable, u64>();
 
 impl DirectionTable {
     #[must_use]
@@ -250,15 +251,19 @@ impl Rotation {
     pub(crate) const UP_SHIFT: u32 = 2;
     
     pub const IDENTITY: Rotation = Rotation::new(Direction::PosY, 0);
+    
     pub const ROTATE_X: Rotation = Rotation::new(Direction::PosZ, 0);
     pub const ROTATE_X_CCW: Rotation = Self::ROTATE_X;
     pub const ROTATE_X_CW: Rotation = Self::ROTATE_X.invert();
+    
     pub const ROTATE_Y: Rotation = Rotation::new(Direction::PosY, 1);
     pub const ROTATE_Y_CCW: Rotation = Self::ROTATE_Y;
     pub const ROTATE_Y_CW: Rotation = Self::ROTATE_Y.invert();
+    
     pub const ROTATE_Z: Rotation = Rotation::new(Direction::NegX, 1);
     pub const ROTATE_Z_CCW: Rotation = Self::ROTATE_Z;
     pub const ROTATE_Z_CW: Rotation = Self::ROTATE_Z.invert();
+    
     pub const X_ROTATIONS: [Rotation; 4] = Self::ROTATE_X.angles();
     pub const Y_ROTATIONS: [Rotation; 4] = Self::ROTATE_Y.angles();
     pub const Z_ROTATIONS: [Rotation; 4] = Self::ROTATE_Z.angles();// verified
@@ -568,15 +573,13 @@ impl Rotation {
                 }
             }
             let mut table = CachePadded::new([pad(Faces::IDENTITY); 24]);
-            let mut rot_i = 0u8;
-            while rot_i < 24 {
-                let rot = unsafe { Rotation::from_u8_unchecked(rot_i) };
-                table.value[rot_i as usize] = pad(Faces {
+            let mut iter = Rotation::iter();
+            while let Some(rot) = iter.next() {
+                table.value[rot.0 as usize] = pad(Faces {
                     up: rot.up(),
                     right: rot.right(),
                     forward: rot.forward(),
                 });
-                rot_i += 1;
             }
             table
         };
@@ -716,21 +719,14 @@ impl Rotation {
     pub const fn difference(self, rotation: Self)  -> Self {
         const DIFFERENCE_TABLE: [[Rotation; 32]; 24] = {
             let mut table = [[Rotation::IDENTITY; 32]; 24];
-            let mut lhs_i = 0;
-            while lhs_i < 24 {
-                let mut rhs_i = 0;
-                while rhs_i < 24 {
-                    let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
-                    let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
-                    table[lhs_i as usize][rhs_i as usize]
-                        = lhs.invert().reorient(rhs);
-                    rhs_i += 1;
-                }
-                lhs_i += 1;
+            let mut iter = Rotation::cartesian_product();
+            while let Some([lhs, rhs]) = iter.next() {
+                table[rhs.0 as usize][lhs.0 as usize]
+                    = lhs.invert().reorient(rhs);
             }
             table
         };
-        DIFFERENCE_TABLE[self.0 as usize][rotation.0 as usize]
+        DIFFERENCE_TABLE[rotation.0 as usize][self.0 as usize]
     }
     
     // verified (2025-12-28): reface and source_face are symmetrical.
@@ -924,16 +920,9 @@ impl Rotation {
                 rot
             }
             let mut table = [[Rotation::IDENTITY; 32]; 24];
-            let mut lhs_i = 0;
-            while lhs_i < 24 {
-                let mut rhs_i = 0;
-                while rhs_i < 24 {
-                    let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
-                    let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
-                    table[rhs_i as usize][lhs_i as usize] = reorient_slow(lhs, rhs);
-                    rhs_i += 1;
-                }
-                lhs_i += 1;
+            let mut iter = Rotation::cartesian_product();
+            while let Some([lhs, rhs]) = iter.next() {
+                table[rhs.0 as usize][lhs.0 as usize] = reorient_slow(lhs, rhs);
             }
             table
         };
@@ -964,16 +953,10 @@ impl Rotation {
                 rot
             }
             let mut table = [[Rotation::IDENTITY; 32]; 24];
-            let mut lhs_i = 0;
-            while lhs_i < 24 {
-                let mut rhs_i = 0;
-                while rhs_i < 24 {
-                    let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
-                    let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
-                    table[rhs_i as usize][lhs_i as usize] = deorient_slow(lhs, rhs);
-                    rhs_i += 1;
-                }
-                lhs_i += 1;
+
+            let mut iter = Rotation::cartesian_product();
+            while let Some([lhs, rhs]) = iter.next() {
+                table[rhs.0 as usize][lhs.0 as usize] = deorient_slow(lhs, rhs);
             }
             table
         };
@@ -991,20 +974,13 @@ impl Rotation {
     pub const fn conjugate(self, rotation: Self) -> Self {
         const CONJUGATE_TABLE: [[Rotation; 32]; 24] = {
             let mut table = [[Rotation::IDENTITY; 32]; 24];
-            let mut lhs_i = 0;
-            while lhs_i < 24 {
-                let mut rhs_i = 0;
-                while rhs_i < 24 {
-                    let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
-                    let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
-                    table[lhs_i as usize][rhs_i as usize] = lhs.invert().reorient(rhs).reorient(lhs);
-                    rhs_i += 1;
-                }
-                lhs_i += 1;
+            let mut prods = CartesianRotationIter::new();
+            while let Some([lhs, rhs]) = prods.next() {
+                table[rhs.0 as usize][lhs.0 as usize] = lhs.invert().reorient(rhs).reorient(lhs);
             }
             table
         };
-        CONJUGATE_TABLE[self.0 as usize][rotation.0 as usize]
+        CONJUGATE_TABLE[rotation.0 as usize][self.0 as usize]
     }
     
     // verified (2025-12-28)
@@ -1014,11 +990,9 @@ impl Rotation {
     pub const fn invert(self) -> Self {
         const INVERT_TABLE: [Rotation; 24] = {
             let mut table = [Rotation::IDENTITY; 24];
-            let mut i = 0;
-            while i < 24 {
-                let rot = unsafe { Rotation::from_u8_unchecked(i) };
-                table[i as usize] = Rotation::IDENTITY.deorient(rot);
-                i += 1;
+            let mut iter = Rotation::iter();
+            while let Some(rot) = iter.next() {
+                table[rot.0 as usize] = Rotation::IDENTITY.deorient(rot);
             }
             table
         };
@@ -1072,15 +1046,23 @@ impl Rotation {
     #[cfg(feature = "glam")]
     #[must_use]
     pub fn to_matrix(self) -> glam::Mat4 {
-        let up = self.reface(Direction::PosY).to_vec3a();
-        let forward = self.reface(Direction::PosZ).to_vec3a();
-        let right = self.reface(Direction::NegX).to_vec3a();
-        Mat4::from_cols(
-            right.extend(0.0),
-            up.extend(0.0),
-            forward.extend(0.0),
-            Vec4::W,
-        )
+        const MATRICES: [glam::Mat4; 24] = {
+            let mut mats = [glam::Mat4::IDENTITY; 24];
+            let mut iter = Rotation::iter();
+            while let Some(rot) = iter.next() {
+                let u = rot.reface(Direction::PosY).to_vec3();
+                let f = rot.reface(Direction::PosZ).to_vec3();
+                let r = rot.reface(Direction::NegX).to_vec3();
+                mats[rot.0 as usize] = glam::Mat4::from_cols(
+                    Vec4::new(r.x, r.y, r.z, 0.0),
+                    Vec4::new(u.x, u.y, u.z, 0.0),
+                    Vec4::new(f.x, f.y, f.z, 0.0),
+                    Vec4::W,
+                )
+            }
+            mats
+        };
+        MATRICES[self.0 as usize]
     }
 
     #[cfg(feature = "glam")]
@@ -1118,6 +1100,16 @@ impl RotationIterator {
         }
         Some(unsafe { Rotation::from_u8_unchecked(self.rotation) })
     }
+
+    #[must_use]
+    pub const fn next(&mut self) -> Option<Rotation> {
+        if self.rotation >= 24 {
+            return None;
+        }
+        let result = Some(unsafe { Rotation::from_u8_unchecked(self.rotation) });
+        self.rotation += 1;
+        result
+    }
 }
 
 impl Iterator for RotationIterator {
@@ -1131,12 +1123,7 @@ impl Iterator for RotationIterator {
     }
     
     fn next(&mut self) -> Option<Self::Item> {
-        if self.rotation >= 24 {
-            return None;
-        }
-        let result = Some(unsafe { Rotation::from_u8_unchecked(self.rotation) });
-        self.rotation += 1;
-        result
+        self.next()
     }
 }
 

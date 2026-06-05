@@ -26,6 +26,8 @@ pub mod parity;
 pub mod polarity;
 pub mod rotation;
 
+mod simd;
+
 pub use axis::Axis;
 pub use direction::Direction;
 pub use flip::Flip;

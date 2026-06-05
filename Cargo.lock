@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "byteset"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "192375f2d46a2cfcb26a53ec9250f4e0fb515a0169dff65de60579cea7e5035a"
+
+[[package]]
 name = "glam"
 version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -49,6 +55,7 @@ dependencies = [
 name = "voxel-orient"
 version = "0.2.0-indev"
 dependencies = [
+ "byteset",
  "glam",
  "isit",
  "lolevel",
