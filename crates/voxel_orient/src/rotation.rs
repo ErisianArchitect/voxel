@@ -40,6 +40,29 @@ pub const fn wrap_rotation_u8(rotation: u8) -> u8 {
     CACHED_WRAP_U8_ARRAY.value[rotation as usize]
 }
 
+#[repr(C, align(8))]
+struct DirectionTable {
+    table: [Direction; 6],
+    pad: u16,
+}
+
+impl DirectionTable {
+    #[must_use]
+    #[inline(always)]
+    pub const fn new(table: [Direction; 6]) -> Self {
+        Self {
+            table,
+            pad: 0,
+        }
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn get(&self, dir: Direction) -> Direction {
+        self.table[dir as usize]
+    }
+}
+
 // Verified (2026-1-4)
 // This Rot enum is used for niche optimization and other performance optimizations.
 #[repr(u8)]
@@ -169,6 +192,25 @@ macro_rules! rotate_coord_fns {
     };
 }
 
+/// ```rust, ignore
+/// pad_table![]
+/// ```
+macro_rules! pad_table {
+    ($($elem:ident),*$(,)?) => {
+        [$(Direction::$elem,)* Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY]
+    }
+}
+
+/// Pads a table of 6 directions into a table of 8 directions (where the extras are PosY).
+/// ```rust, ignore
+/// pad_direction_table[PosY, PosX, PosZ, NegY, NegX, NegZ]
+/// ```
+macro_rules! pad_direction_table {
+    ($pos_y:ident, $pos_x:ident, $pos_z:ident, $neg_y:ident, $neg_x:ident, $neg_z:ident) => {
+        [Direction::$pos_y, Direction::$pos_x, Direction::$pos_z, Direction::$neg_y, Direction::$neg_x, Direction::$neg_z, Direction::PosY, Direction::PosY]
+    }
+}
+
 impl Rotation {
     #[cfg(feature = "glam")]
     const QUATS: [Quat; 24] = [
@@ -243,11 +285,71 @@ impl Rotation {
         Self::ROTATE_Z.invert().angles(), // NegZ
     ];
 
+    const REFACE_DIRECTIONS: [DirectionTable; 24] = {
+        use Direction::*;
+        [
+            DirectionTable::new([PosY, PosX, PosZ, NegY, NegX, NegZ]),
+            DirectionTable::new([PosY, NegZ, PosX, NegY, PosZ, NegX]),
+            DirectionTable::new([PosY, NegX, NegZ, NegY, PosX, PosZ]),
+            DirectionTable::new([PosY, PosZ, NegX, NegY, NegZ, PosX]),
+            DirectionTable::new([PosX, NegZ, NegY, NegX, PosZ, PosY]),
+            DirectionTable::new([PosX, PosY, NegZ, NegX, NegY, PosZ]),
+            DirectionTable::new([PosX, PosZ, PosY, NegX, NegZ, NegY]),
+            DirectionTable::new([PosX, NegY, PosZ, NegX, PosY, NegZ]),
+            DirectionTable::new([PosZ, PosX, NegY, NegZ, NegX, PosY]),
+            DirectionTable::new([PosZ, PosY, PosX, NegZ, NegY, NegX]),
+            DirectionTable::new([PosZ, NegX, PosY, NegZ, PosX, NegY]),
+            DirectionTable::new([PosZ, NegY, NegX, NegZ, PosY, PosX]),
+            DirectionTable::new([NegY, PosX, NegZ, PosY, NegX, PosZ]),
+            DirectionTable::new([NegY, PosZ, PosX, PosY, NegZ, NegX]),
+            DirectionTable::new([NegY, NegX, PosZ, PosY, PosX, NegZ]),
+            DirectionTable::new([NegY, NegZ, NegX, PosY, PosZ, PosX]),
+            DirectionTable::new([NegX, PosZ, NegY, PosX, NegZ, PosY]),
+            DirectionTable::new([NegX, PosY, PosZ, PosX, NegY, NegZ]),
+            DirectionTable::new([NegX, NegZ, PosY, PosX, PosZ, NegY]),
+            DirectionTable::new([NegX, NegY, NegZ, PosX, PosY, PosZ]),
+            DirectionTable::new([NegZ, NegX, NegY, PosZ, PosX, PosY]),
+            DirectionTable::new([NegZ, PosY, NegX, PosZ, NegY, PosX]),
+            DirectionTable::new([NegZ, PosX, PosY, PosZ, NegX, NegY]),
+            DirectionTable::new([NegZ, NegY, PosX, PosZ, PosY, NegX]),
+        ]
+    };
+
+    const SOURCE_DIRECTIONS: [DirectionTable; 24] = {
+        use Direction::*;
+        [
+            DirectionTable::new([PosY, PosX, PosZ, NegY, NegX, NegZ]),
+            DirectionTable::new([PosY, PosZ, NegX, NegY, NegZ, PosX]),
+            DirectionTable::new([PosY, NegX, NegZ, NegY, PosX, PosZ]),
+            DirectionTable::new([PosY, NegZ, PosX, NegY, PosZ, NegX]),
+            DirectionTable::new([NegZ, PosY, NegX, PosZ, NegY, PosX]),
+            DirectionTable::new([PosX, PosY, NegZ, NegX, NegY, PosZ]),
+            DirectionTable::new([PosZ, PosY, PosX, NegZ, NegY, NegX]),
+            DirectionTable::new([NegX, PosY, PosZ, PosX, NegY, NegZ]),
+            DirectionTable::new([NegZ, PosX, PosY, PosZ, NegX, NegY]),
+            DirectionTable::new([PosX, PosZ, PosY, NegX, NegZ, NegY]),
+            DirectionTable::new([PosZ, NegX, PosY, NegZ, PosX, NegY]),
+            DirectionTable::new([NegX, NegZ, PosY, PosX, PosZ, NegY]),
+            DirectionTable::new([NegY, PosX, NegZ, PosY, NegX, PosZ]),
+            DirectionTable::new([NegY, PosZ, PosX, PosY, NegZ, NegX]),
+            DirectionTable::new([NegY, NegX, PosZ, PosY, PosX, NegZ]),
+            DirectionTable::new([NegY, NegZ, NegX, PosY, PosZ, PosX]),
+            DirectionTable::new([NegZ, NegY, PosX, PosZ, PosY, NegX]),
+            DirectionTable::new([PosX, NegY, PosZ, NegX, PosY, NegZ]),
+            DirectionTable::new([PosZ, NegY, NegX, NegZ, PosY, PosX]),
+            DirectionTable::new([NegX, NegY, NegZ, PosX, PosY, PosZ]),
+            DirectionTable::new([NegZ, NegX, NegY, PosZ, PosX, PosY]),
+            DirectionTable::new([PosX, NegZ, NegY, NegX, PosZ, PosY]),
+            DirectionTable::new([PosZ, PosX, NegY, NegZ, NegX, PosY]),
+            DirectionTable::new([NegX, PosZ, NegY, PosX, NegZ, PosY]),
+        ]
+    };
+
     // verified (2025-12-28)
     #[must_use]
     #[inline]
     pub const fn face_rotation(face: Direction, angle: i32) -> Self {
-        Self::FACE_ROTATIONS[face.rotation_discriminant() as usize][wrap_angle(angle) as usize]
+        Self::FACE_ROTATIONS[face as usize][wrap_angle(angle) as usize]
     }
     
     // verified (2025-12-28)
@@ -518,201 +620,45 @@ impl Rotation {
     }
     
     // verified (2026-1-5)
+    /// Get the rotated `PosY` direction.
     #[must_use]
     pub const fn up(self) -> Direction {
-        use Direction::*;
-        use Rot::*;
-        match self.0 {
-            PosY0 => PosY,
-            PosY1 => PosY,
-            PosY2 => PosY,
-            PosY3 => PosY,
-            PosX0 => PosX,
-            PosX1 => PosX,
-            PosX2 => PosX,
-            PosX3 => PosX,
-            PosZ0 => PosZ,
-            PosZ1 => PosZ,
-            PosZ2 => PosZ,
-            PosZ3 => PosZ,
-            NegY0 => NegY,
-            NegY1 => NegY,
-            NegY2 => NegY,
-            NegY3 => NegY,
-            NegX0 => NegX,
-            NegX1 => NegX,
-            NegX2 => NegX,
-            NegX3 => NegX,
-            NegZ0 => NegZ,
-            NegZ1 => NegZ,
-            NegZ2 => NegZ,
-            NegZ3 => NegZ,
-        }
+        Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::PosY)
     }
 
     // verified (2026-1-5)
+    /// Get the rotated `NegY` direction.
     #[must_use]
     pub const fn down(self) -> Direction {
-        use Direction::*;
-        use Rot::*;
-        match self.0 {
-            PosY0 => NegY,
-            PosY1 => NegY,
-            PosY2 => NegY,
-            PosY3 => NegY,
-            PosX0 => NegX,
-            PosX1 => NegX,
-            PosX2 => NegX,
-            PosX3 => NegX,
-            PosZ0 => NegZ,
-            PosZ1 => NegZ,
-            PosZ2 => NegZ,
-            PosZ3 => NegZ,
-            NegY0 => PosY,
-            NegY1 => PosY,
-            NegY2 => PosY,
-            NegY3 => PosY,
-            NegX0 => PosX,
-            NegX1 => PosX,
-            NegX2 => PosX,
-            NegX3 => PosX,
-            NegZ0 => PosZ,
-            NegZ1 => PosZ,
-            NegZ2 => PosZ,
-            NegZ3 => PosZ,
-        }
+        Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::NegY)
     }
 
     // verified (2026-1-5)
+    /// Get the rotated `NegX` direction.
     #[must_use]
     pub const fn left(self) -> Direction {
-        use Direction::*;
-        use Rot::*;
-        match self.0 {
-            PosY0 => NegX,
-            PosY1 => PosZ,
-            PosY2 => PosX,
-            PosY3 => NegZ,
-            PosX0 => PosZ,
-            PosX1 => NegY,
-            PosX2 => NegZ,
-            PosX3 => PosY,
-            PosZ0 => NegX,
-            PosZ1 => NegY,
-            PosZ2 => PosX,
-            PosZ3 => PosY,
-            NegY0 => NegX,
-            NegY1 => NegZ,
-            NegY2 => PosX,
-            NegY3 => PosZ,
-            NegX0 => NegZ,
-            NegX1 => NegY,
-            NegX2 => PosZ,
-            NegX3 => PosY,
-            NegZ0 => PosX,
-            NegZ1 => NegY,
-            NegZ2 => NegX,
-            NegZ3 => PosY,
-        }
+        Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::NegX)
     }
 
     // verified (2026-1-5)
+    /// Get the rotated `PosX` direction.
     #[must_use]
     pub const fn right(self) -> Direction {
-        use Direction::*;
-        use Rot::*;
-        match self.0 {
-            PosY0 => PosX,
-            PosY1 => NegZ,
-            PosY2 => NegX,
-            PosY3 => PosZ,
-            PosX0 => NegZ,
-            PosX1 => PosY,
-            PosX2 => PosZ,
-            PosX3 => NegY,
-            PosZ0 => PosX,
-            PosZ1 => PosY,
-            PosZ2 => NegX,
-            PosZ3 => NegY,
-            NegY0 => PosX,
-            NegY1 => PosZ,
-            NegY2 => NegX,
-            NegY3 => NegZ,
-            NegX0 => PosZ,
-            NegX1 => PosY,
-            NegX2 => NegZ,
-            NegX3 => NegY,
-            NegZ0 => NegX,
-            NegZ1 => PosY,
-            NegZ2 => PosX,
-            NegZ3 => NegY,
-        }
+        Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::PosX)
     }
 
     // verified (2026-1-5)
+    /// Get the rotated `NegZ` direction.
     #[must_use]
     pub const fn forward(self) -> Direction {
-        use Direction::*;
-        use Rot::*;
-        match self.0 {
-            PosY0 => NegZ,
-            PosY1 => NegX,
-            PosY2 => PosZ,
-            PosY3 => PosX,
-            PosX0 => PosY,
-            PosX1 => PosZ,
-            PosX2 => NegY,
-            PosX3 => NegZ,
-            PosZ0 => PosY,
-            PosZ1 => NegX,
-            PosZ2 => NegY,
-            PosZ3 => PosX,
-            NegY0 => PosZ,
-            NegY1 => NegX,
-            NegY2 => NegZ,
-            NegY3 => PosX,
-            NegX0 => PosY,
-            NegX1 => NegZ,
-            NegX2 => NegY,
-            NegX3 => PosZ,
-            NegZ0 => PosY,
-            NegZ1 => PosX,
-            NegZ2 => NegY,
-            NegZ3 => NegX,
-        }
+        Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::NegZ)
     }
 
     // verified (2026-1-5)
+    /// Get the rotated `PosZ` direction.
     #[must_use]
     pub const fn backward(self) -> Direction {
-        use Direction::*;
-        use Rot::*;
-        match self.0 {
-            PosY0 => PosZ,
-            PosY1 => PosX,
-            PosY2 => NegZ,
-            PosY3 => NegX,
-            PosX0 => NegY,
-            PosX1 => NegZ,
-            PosX2 => PosY,
-            PosX3 => PosZ,
-            PosZ0 => NegY,
-            PosZ1 => PosX,
-            PosZ2 => PosY,
-            PosZ3 => NegX,
-            NegY0 => NegZ,
-            NegY1 => PosX,
-            NegY2 => PosZ,
-            NegY3 => NegX,
-            NegX0 => NegY,
-            NegX1 => PosZ,
-            NegX2 => PosY,
-            NegX3 => NegZ,
-            NegZ0 => NegY,
-            NegZ1 => NegX,
-            NegZ2 => PosY,
-            NegZ3 => PosX,
-        }        
+        Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::PosZ)
     }
     
     rotate_coord_fns!(i8, i16, i32, i64, i128, isize, f32, f64);
@@ -750,184 +696,41 @@ impl Rotation {
         })
     }
 
+    #[must_use]
+    #[inline(always)]
     pub const fn difference(self, rotation: Self)  -> Self {
-        self.invert().reorient(rotation)
+        const DIFFERENCE_TABLE: [[Rotation; 32]; 24] = {
+            let mut table = [[Rotation::IDENTITY; 32]; 24];
+            let mut lhs_i = 0;
+            while lhs_i < 24 {
+                let mut rhs_i = 0;
+                while rhs_i < 24 {
+                    let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
+                    let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
+                    table[lhs_i as usize][rhs_i as usize]
+                        = lhs.invert().reorient(rhs);
+                    rhs_i += 1;
+                }
+                lhs_i += 1;
+            }
+            table
+        };
+        DIFFERENCE_TABLE[self.0 as usize][rotation.0 as usize]
     }
     
     // verified (2025-12-28): reface and source_face are symmetrical.
     /// Rotates direction.
     #[must_use]
     pub const fn reface(self, direction: Direction) -> Direction {
-        match direction {
-            Direction::NegX => self.left(),
-            Direction::NegY => self.down(),
-            Direction::NegZ => self.forward(),
-            Direction::PosX => self.right(),
-            Direction::PosY => self.up(),
-            Direction::PosZ => self.backward(),
-        }
+        // Self::REFACE_TABLE[direction as usize][self.0 as usize]
+        Self::REFACE_DIRECTIONS[self.0 as usize].get(direction)
     }
 
     // verified (2025-12-28): source_face and reface are symmetrical.
     /// Tells which [Direction] rotated to `destination`.
     #[must_use]
     pub const fn source_face(self, destination: Direction) -> Direction {
-        // This code was bootstrap generated. I wrote a naive solution,
-        // then generated this code with the naive solution.
-        // Besides maybe if you rearrange the order of matching,
-        // this should theoretically be the optimal solution.
-        // This CAN be optimized by flattening the key space.
-        // By combining the angle, up, and destination into a single index,
-        // this could become an O(1) lookup into a table.
-        use Direction::*;
-        use Rot::*;
-        // TODO: Use the new `Rot` variants to eliminate `self.angle, self.up` -> `self.0 as Rot`
-        match (self.0, destination) {
-            (PosY0, PosY) => PosY,
-            (PosY0, PosX) => PosX,
-            (PosY0, PosZ) => PosZ,
-            (PosY0, NegY) => NegY,
-            (PosY0, NegX) => NegX,
-            (PosY0, NegZ) => NegZ,
-            (PosX0, PosY) => NegZ,
-            (PosX0, PosX) => PosY,
-            (PosX0, PosZ) => NegX,
-            (PosX0, NegY) => PosZ,
-            (PosX0, NegX) => NegY,
-            (PosX0, NegZ) => PosX,
-            (PosZ0, PosY) => NegZ,
-            (PosZ0, PosX) => PosX,
-            (PosZ0, PosZ) => PosY,
-            (PosZ0, NegY) => PosZ,
-            (PosZ0, NegX) => NegX,
-            (PosZ0, NegZ) => NegY,
-            (NegY0, PosY) => NegY,
-            (NegY0, PosX) => PosX,
-            (NegY0, PosZ) => NegZ,
-            (NegY0, NegY) => PosY,
-            (NegY0, NegX) => NegX,
-            (NegY0, NegZ) => PosZ,
-            (NegX0, PosY) => NegZ,
-            (NegX0, PosX) => NegY,
-            (NegX0, PosZ) => PosX,
-            (NegX0, NegY) => PosZ,
-            (NegX0, NegX) => PosY,
-            (NegX0, NegZ) => NegX,
-            (NegZ0, PosY) => NegZ,
-            (NegZ0, PosX) => NegX,
-            (NegZ0, PosZ) => NegY,
-            (NegZ0, NegY) => PosZ,
-            (NegZ0, NegX) => PosX,
-            (NegZ0, NegZ) => PosY,
-            (PosY1, PosY) => PosY,
-            (PosY1, PosX) => PosZ,
-            (PosY1, PosZ) => NegX,
-            (PosY1, NegY) => NegY,
-            (PosY1, NegX) => NegZ,
-            (PosY1, NegZ) => PosX,
-            (PosX1, PosY) => PosX,
-            (PosX1, PosX) => PosY,
-            (PosX1, PosZ) => NegZ,
-            (PosX1, NegY) => NegX,
-            (PosX1, NegX) => NegY,
-            (PosX1, NegZ) => PosZ,
-            (PosZ1, PosY) => PosX,
-            (PosZ1, PosX) => PosZ,
-            (PosZ1, PosZ) => PosY,
-            (PosZ1, NegY) => NegX,
-            (PosZ1, NegX) => NegZ,
-            (PosZ1, NegZ) => NegY,
-            (NegY1, PosY) => NegY,
-            (NegY1, PosX) => PosZ,
-            (NegY1, PosZ) => PosX,
-            (NegY1, NegY) => PosY,
-            (NegY1, NegX) => NegZ,
-            (NegY1, NegZ) => NegX,
-            (NegX1, PosY) => PosX,
-            (NegX1, PosX) => NegY,
-            (NegX1, PosZ) => PosZ,
-            (NegX1, NegY) => NegX,
-            (NegX1, NegX) => PosY,
-            (NegX1, NegZ) => NegZ,
-            (NegZ1, PosY) => PosX,
-            (NegZ1, PosX) => NegZ,
-            (NegZ1, PosZ) => NegY,
-            (NegZ1, NegY) => NegX,
-            (NegZ1, NegX) => PosZ,
-            (NegZ1, NegZ) => PosY,
-            (PosY2, PosY) => PosY,
-            (PosY2, PosX) => NegX,
-            (PosY2, PosZ) => NegZ,
-            (PosY2, NegY) => NegY,
-            (PosY2, NegX) => PosX,
-            (PosY2, NegZ) => PosZ,
-            (PosX2, PosY) => PosZ,
-            (PosX2, PosX) => PosY,
-            (PosX2, PosZ) => PosX,
-            (PosX2, NegY) => NegZ,
-            (PosX2, NegX) => NegY,
-            (PosX2, NegZ) => NegX,
-            (PosZ2, PosY) => PosZ,
-            (PosZ2, PosX) => NegX,
-            (PosZ2, PosZ) => PosY,
-            (PosZ2, NegY) => NegZ,
-            (PosZ2, NegX) => PosX,
-            (PosZ2, NegZ) => NegY,
-            (NegY2, PosY) => NegY,
-            (NegY2, PosX) => NegX,
-            (NegY2, PosZ) => PosZ,
-            (NegY2, NegY) => PosY,
-            (NegY2, NegX) => PosX,
-            (NegY2, NegZ) => NegZ,
-            (NegX2, PosY) => PosZ,
-            (NegX2, PosX) => NegY,
-            (NegX2, PosZ) => NegX,
-            (NegX2, NegY) => NegZ,
-            (NegX2, NegX) => PosY,
-            (NegX2, NegZ) => PosX,
-            (NegZ2, PosY) => PosZ,
-            (NegZ2, PosX) => PosX,
-            (NegZ2, PosZ) => NegY,
-            (NegZ2, NegY) => NegZ,
-            (NegZ2, NegX) => NegX,
-            (NegZ2, NegZ) => PosY,
-            (PosY3, PosY) => PosY,
-            (PosY3, PosX) => NegZ,
-            (PosY3, PosZ) => PosX,
-            (PosY3, NegY) => NegY,
-            (PosY3, NegX) => PosZ,
-            (PosY3, NegZ) => NegX,
-            (PosX3, PosY) => NegX,
-            (PosX3, PosX) => PosY,
-            (PosX3, PosZ) => PosZ,
-            (PosX3, NegY) => PosX,
-            (PosX3, NegX) => NegY,
-            (PosX3, NegZ) => NegZ,
-            (PosZ3, PosY) => NegX,
-            (PosZ3, PosX) => NegZ,
-            (PosZ3, PosZ) => PosY,
-            (PosZ3, NegY) => PosX,
-            (PosZ3, NegX) => PosZ,
-            (PosZ3, NegZ) => NegY,
-            (NegY3, PosY) => NegY,
-            (NegY3, PosX) => NegZ,
-            (NegY3, PosZ) => NegX,
-            (NegY3, NegY) => PosY,
-            (NegY3, NegX) => PosZ,
-            (NegY3, NegZ) => PosX,
-            (NegX3, PosY) => NegX,
-            (NegX3, PosX) => NegY,
-            (NegX3, PosZ) => NegZ,
-            (NegX3, NegY) => PosX,
-            (NegX3, NegX) => PosY,
-            (NegX3, NegZ) => PosZ,
-            (NegZ3, PosY) => NegX,
-            (NegZ3, PosX) => PosZ,
-            (NegZ3, PosZ) => NegY,
-            (NegZ3, NegY) => PosX,
-            (NegZ3, NegX) => NegZ,
-            (NegZ3, NegZ) => PosY,
-        }
+        Self::SOURCE_DIRECTIONS[self.0 as usize].get(destination)
     }
 
     // verified (2025-12-28)
@@ -1089,17 +892,35 @@ impl Rotation {
     /// Rotate a [Rotation] by another [Rotation].
     #[must_use]
     pub const fn reorient(self, rotation: Self) -> Self {
-        // What??? I know I wrote this code, but this is kinda nuts.
-        let up = self.up();
-        let fwd = self.forward();
-        let rot_up = rotation.reface(up);
-        let rot_fwd = rotation.reface(fwd);
-        // Pattern matching is used here because it's a const fn and unwrap()
-        // won't work.
-        let Some(rot) = Self::from_up_and_forward(rot_up, rot_fwd) else {
-            unreachable!()
+        const REORIENT_TABLE: [[Rotation; 32]; 24] = {
+            const fn reorient_slow(lhs: Rotation, rhs: Rotation) -> Rotation {
+                // What??? I know I wrote this code, but this is kinda nuts.
+                let up = lhs.up();
+                let fwd = lhs.forward();
+                let rot_up = rhs.reface(up);
+                let rot_fwd = rhs.reface(fwd);
+                // Pattern matching is used here because it's a const fn and unwrap()
+                // won't work.
+                let Some(rot) = Rotation::from_up_and_forward(rot_up, rot_fwd) else {
+                    unreachable!()
+                };
+                rot
+            }
+            let mut table = [[Rotation::IDENTITY; 32]; 24];
+            let mut lhs_i = 0;
+            while lhs_i < 24 {
+                let mut rhs_i = 0;
+                while rhs_i < 24 {
+                    let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
+                    let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
+                    table[lhs_i as usize][rhs_i as usize] = reorient_slow(lhs, rhs);
+                    rhs_i += 1;
+                }
+                lhs_i += 1;
+            }
+            table
         };
-        rot
+        REORIENT_TABLE[self.0 as usize][rotation.0 as usize]
     }
 
     // verified (2025-12-28)

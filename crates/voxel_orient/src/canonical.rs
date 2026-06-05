@@ -104,6 +104,24 @@ impl CanonicalGroup {
 
     #[must_use]
     #[inline(always)]
+    pub const fn compose(self, group: Self) -> Self {
+        /*[
+            [0, 1, 2, 3],
+            [1, 0, 3, 2],
+            [2, 3, 0, 1],
+            [3, 2, 1, 0],
+        ]*/
+        unsafe { ::core::mem::transmute(self as u8 ^ group as u8) }
+    }
+
+    // #[must_use]
+    // #[inline(always)]
+    // pub const fn compose_x(self, rhs: Self) -> Self {
+    //     Self::COMPOSITION_TABLE[Axis::X as usize][self as usize][rhs as usize]
+    // }
+
+    #[must_use]
+    #[inline(always)]
     pub const fn cycle(self, count: i32) -> Self {
         Self::GROUPS[((self as i64 + count as i64) % 4) as usize]
     }
@@ -127,6 +145,27 @@ impl CanonicalGroup {
             group_index: 0,
         }
     }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn text(self) -> &'static str {
+        const NAMES: [&'static str; 4] = [
+            "Group0",
+            "Group1",
+            "Group2",
+            "Group3",
+        ];
+        NAMES[self as usize]
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn display(self, short: bool) -> CanonicalGroupDisplay {
+        CanonicalGroupDisplay {
+            group: self,
+            short,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -144,6 +183,22 @@ impl Iterator for CanonicalGroupIter {
             let group = unsafe { *CanonicalGroup::GROUPS.get_unchecked(self.group_index as usize) };
             self.group_index += 1;
             Some(group)
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CanonicalGroupDisplay {
+    group: CanonicalGroup,
+    short: bool,
+}
+
+impl std::fmt::Display for CanonicalGroupDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.short {
+            write!(f, "G{}", self.group as u8)
+        } else {
+            write!(f, "{}", self.group.text())
         }
     }
 }

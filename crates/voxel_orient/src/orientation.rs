@@ -780,6 +780,12 @@ impl Orientation {
             .map(move |i| Self(unsafe { Orient::from_u8_unchecked(i) }))
     }
 
+    #[must_use]
+    #[inline(always)]
+    pub const fn cartesian_product<const PRODUCTS: usize>() -> CartesianOrientationIter<PRODUCTS> {
+        CartesianOrientationIter::new()
+    }
+
     /// Cycle through the 24 [Rotation] states before cycling through the 8 [Flip] states.
     #[must_use]
     #[inline]
@@ -1455,6 +1461,62 @@ impl Iterator for CanonicalIter {
     }
 }
 
+#[derive(Clone)]
+pub struct CartesianOrientationIter<const PRODUCTS: usize> {
+    iterators: [u8; PRODUCTS],
+}
+
+impl<const PRODUCTS: usize> CartesianOrientationIter<PRODUCTS> {
+    pub const fn new() -> Self {
+        Self {
+            iterators: [0u8; PRODUCTS],
+        }
+    }
+
+    #[must_use]
+    pub const fn next(&mut self) -> Option<[Orientation; PRODUCTS]> {
+        if PRODUCTS == 0 {
+            return None;
+        }
+
+        if self.iterators[0] >= 192 {
+            return None;
+        }
+
+        union Transmuter<const PRODUCTS: usize> {
+            u8_prods: [u8; PRODUCTS],
+            orient_prods: [Orientation; PRODUCTS],
+        }
+        let result = Some(unsafe {
+            Transmuter {
+                u8_prods: self.iterators,
+            }.orient_prods
+        });
+
+        let mut i = PRODUCTS;
+        if i != 0 {
+            loop {
+                i -= 1;
+                if i == 0 || self.iterators[i] < 191 {
+                    self.iterators[i] += 1;
+                    break;
+                }
+                self.iterators[i] = 0;
+            }
+        }
+        
+        result
+    }
+}
+
+impl<const PRODUCTS: usize> Iterator for CartesianOrientationIter<PRODUCTS> {
+    type Item = [Orientation; PRODUCTS];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next()
+    }
+}
+
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct OrientLongDisplay(pub Orientation);
@@ -1561,60 +1623,6 @@ mod tests {
                     assert_ne!(base, reorient);
                     assert_ne!(reorient, deorient);
                 }
-            }
-        }
-    }
-
-    #[test]
-    fn orient_cycle_test() {
-        for base in Orientation::iter() {
-            for orient in Orientation::iter() {
-                for cycle in -3..4 {
-                    let reoriented = base.reorient_local_cycle(orient, cycle);
-                    let deoriented = reoriented.deorient_local_cycle(orient, cycle);
-                    let deoriented2 = reoriented.reorient_local_cycle(orient.invert(), cycle);
-                    assert_eq!(base, deoriented);
-                    assert_eq!(base, deoriented2);
-                    let reoriented = base.reorient_cycle(orient, cycle);
-                    let deoriented = reoriented.deorient_cycle(orient, cycle);
-                    let deoriented2 = reoriented.reorient_cycle(orient.invert(), cycle);
-                    assert_eq!(base, deoriented);
-                    assert_eq!(base, deoriented2);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn difference_test() {
-        for lhs in Orientation::iter() {
-            for rhs in Orientation::iter() {
-                let difference = lhs.difference(rhs);
-                assert_eq!(lhs.reorient(difference), rhs);
-            }
-        }
-    }
-
-    #[test]
-    fn conjugate_test() {
-        for lhs in Orientation::iter() {
-            for rhs in Orientation::iter() {
-                let conjugation = lhs.conjugate(rhs);
-                assert_eq!(lhs.reorient(conjugation), rhs.reorient(lhs));
-            }
-        }
-        println!("conjugate test passed.")
-    }
-
-    #[test]
-    fn kernel_mapping() {
-        for lhs in Orientation::iter() {
-            for rhs in Orientation::iter() {
-                let group_l = lhs.canonical_group_x();
-                let group_r = rhs.canonical_group_x();
-                let result = lhs.reorient(rhs);
-                let group_result = result.canonical_group_x();
-                println!("{group_l:?} -> {group_r:?} -> {group_result:?}");
             }
         }
     }

@@ -19,6 +19,14 @@ const _: () = isit::const_assert(Axis::Y as u8 == 1);
 const _: () = isit::const_assert(Axis::Z as u8 == 2);
 
 impl Axis {
+    pub const AXES: [Self; 3] = [Axis::X, Axis::Y, Axis::Z];
+
+    #[must_use]
+    #[inline(always)]
+    pub const unsafe fn from_u8_unchecked(axis: u8) -> Self {
+        unsafe { ::core::mem::transmute(axis) }
+    }
+    
     /// The direction on this axis in the positive direction.
     #[inline]
     pub const fn pos(self) -> Direction {
