@@ -355,21 +355,9 @@ impl Rotation {
     // verified (2025-12-28)
     #[must_use]
     pub const fn corner_rotation(x: i32, y: i32, z: i32, angle: i32) -> Rotation {
-        let x = if x <= 0 {
-            0
-        } else {
-            1
-        } as usize;
-        let y = if y <= 0 {
-            0
-        } else {
-            1
-        } as usize;
-        let z = if z <= 0 {
-            0
-        } else {
-            1
-        } as usize;
+        let x = (x > 0) as usize;
+        let y = (y > 0) as usize;
+        let z = (z > 0) as usize;
         let angle = wrap_angle(angle) as usize;
         Self::CORNER_ROTATIONS_MATRIX[y][z][x][angle]
     }
@@ -452,8 +440,8 @@ impl Rotation {
         Self::new(Direction::PosY, angle)
     }
     
-    #[must_use]
     /// Creates a new [Rotation] with [Direction::PosZ] as the up direction.
+    #[must_use]
     #[inline]
     pub const fn pos_z(angle: i32) -> Self {
         Self::new(Direction::PosZ, angle)
@@ -467,6 +455,7 @@ impl Rotation {
     /// third rotation is the target rotation applied twice, and
     /// the fourth rotation is the target rotation applied three times.
     #[must_use]
+    #[inline]
     pub const fn angles(self) -> [Self; 4] {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
@@ -484,6 +473,7 @@ impl Rotation {
     /// The first rotation is unrotated, the second rotation is the target rotation,
     /// and the third rotation is the target rotation applied to itself.
     #[must_use]
+    #[inline]
     pub const fn corner_angles(self) -> [Self; 3] {
         let angle1 = self;
         let angle2 = angle1.reorient(angle1);
@@ -496,14 +486,14 @@ impl Rotation {
 
     // verified (2025-12-28)
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn with_flip(self, flip: super::Flip) -> Orientation {
         Orientation::new(self, flip)
     }
 
     // verified (2025-12-28)
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn orientation(self) -> Orientation {
         self.with_flip(super::Flip::NONE)
     }
@@ -563,27 +553,40 @@ impl Rotation {
     #[must_use]
     #[inline(always)]
     pub const fn faces(self) -> Faces {
-        const UP_FORWARD_RIGHT_TABLE: CachePadded<[Faces; 24]> = {
-            let mut table = CachePadded::new([Faces::IDENTITY; 24]);
+        #[repr(C, align(4))]
+        #[derive(Clone, Copy)]
+        struct PadFaces {
+            faces: Faces,
+            pad: u8,
+        }
+        const UP_FORWARD_RIGHT_TABLE: CachePadded<[PadFaces; 24]> = {
+            #[inline(always)]
+            const fn pad(faces: Faces) -> PadFaces {
+                PadFaces {
+                    faces,
+                    pad: 0,
+                }
+            }
+            let mut table = CachePadded::new([pad(Faces::IDENTITY); 24]);
             let mut rot_i = 0u8;
             while rot_i < 24 {
                 let rot = unsafe { Rotation::from_u8_unchecked(rot_i) };
-                table.value[rot_i as usize] = Faces {
+                table.value[rot_i as usize] = pad(Faces {
                     up: rot.up(),
                     right: rot.right(),
                     forward: rot.forward(),
-                };
+                });
                 rot_i += 1;
             }
             table
         };
-        UP_FORWARD_RIGHT_TABLE.value[self.0 as usize]
+        UP_FORWARD_RIGHT_TABLE.value[self.0 as usize].faces
     }
 
     // Yes, this method works. I checked.
     /// Cycle through rotations (24 in total).
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn cycle(self, offset: i32) -> Self {
         let index = self.0 as i64;
         // Don't use wrapping_add here, as tempting as it seems. It would be incorrect because 2**32 is not a multiple of 24.
@@ -592,7 +595,7 @@ impl Rotation {
     }
 
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn angle(self) -> i32 {
         (self.0 as u8 & Self::ANGLE_MASK) as i32
     }
@@ -614,14 +617,21 @@ impl Rotation {
     }
     
     #[must_use]
-    #[inline]
-    pub fn iter() -> RotationIterator {
+    #[inline(always)]
+    pub const fn iter() -> RotationIterator {
         RotationIterator::START
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn cartesian_product<const PRODUCTS: usize>() -> CartesianRotationIter<PRODUCTS> {
+        CartesianRotationIter::new()
     }
     
     // verified (2026-1-5)
     /// Get the rotated `PosY` direction.
     #[must_use]
+    #[inline(always)]
     pub const fn up(self) -> Direction {
         Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::PosY)
     }
@@ -629,6 +639,7 @@ impl Rotation {
     // verified (2026-1-5)
     /// Get the rotated `NegY` direction.
     #[must_use]
+    #[inline(always)]
     pub const fn down(self) -> Direction {
         Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::NegY)
     }
@@ -636,6 +647,7 @@ impl Rotation {
     // verified (2026-1-5)
     /// Get the rotated `NegX` direction.
     #[must_use]
+    #[inline(always)]
     pub const fn left(self) -> Direction {
         Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::NegX)
     }
@@ -643,6 +655,7 @@ impl Rotation {
     // verified (2026-1-5)
     /// Get the rotated `PosX` direction.
     #[must_use]
+    #[inline(always)]
     pub const fn right(self) -> Direction {
         Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::PosX)
     }
@@ -650,6 +663,7 @@ impl Rotation {
     // verified (2026-1-5)
     /// Get the rotated `NegZ` direction.
     #[must_use]
+    #[inline(always)]
     pub const fn forward(self) -> Direction {
         Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::NegZ)
     }
@@ -657,6 +671,7 @@ impl Rotation {
     // verified (2026-1-5)
     /// Get the rotated `PosZ` direction.
     #[must_use]
+    #[inline(always)]
     pub const fn backward(self) -> Direction {
         Self::REFACE_DIRECTIONS[self.0 as usize].get(Direction::PosZ)
     }
@@ -721,18 +736,20 @@ impl Rotation {
     // verified (2025-12-28): reface and source_face are symmetrical.
     /// Rotates direction.
     #[must_use]
+    #[inline(always)]
     pub const fn reface(self, direction: Direction) -> Direction {
-        // Self::REFACE_TABLE[direction as usize][self.0 as usize]
         Self::REFACE_DIRECTIONS[self.0 as usize].get(direction)
     }
 
     // verified (2025-12-28): source_face and reface are symmetrical.
     /// Tells which [Direction] rotated to `destination`.
     #[must_use]
+    #[inline(always)]
     pub const fn source_face(self, destination: Direction) -> Direction {
         Self::SOURCE_DIRECTIONS[self.0 as usize].get(destination)
     }
 
+    // TODO: Make this a lookup table. Ideally using a specialized bit-packed (u16) since Direction is only 6 elements and there are only 4 angles, they can fit in 12 bytes.
     // verified (2025-12-28)
     // double verified (2025-12-29)
     /// Gets the angle of the face oriented to `world_face`.
@@ -913,34 +930,81 @@ impl Rotation {
                 while rhs_i < 24 {
                     let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
                     let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
-                    table[lhs_i as usize][rhs_i as usize] = reorient_slow(lhs, rhs);
+                    table[rhs_i as usize][lhs_i as usize] = reorient_slow(lhs, rhs);
                     rhs_i += 1;
                 }
                 lhs_i += 1;
             }
             table
         };
-        REORIENT_TABLE[self.0 as usize][rotation.0 as usize]
+        REORIENT_TABLE[rotation.0 as usize][self.0 as usize]
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub const fn reorient_local(self, rotation: Self) -> Self {
+        rotation.reorient(self)
     }
 
     // verified (2025-12-28)
     /// Rotate a [Rotation] by the inverse of another [Rotation].
     #[must_use]
     pub const fn deorient(self, rotation: Self) -> Self {
-        let up = self.up();
-        let fwd = self.forward();
-        let rot_up = rotation.source_face(up);
-        let rot_fwd = rotation.source_face(fwd);
-        // Pattern matching is used here because it's a const fn and unwrap()
-        // won't work.
-        let Some(rot) = Self::from_up_and_forward(rot_up, rot_fwd) else {
-            unreachable!()
+        const DEORIENT_TABLE: [[Rotation; 32]; 24] = {
+            const fn deorient_slow(lhs: Rotation, rhs: Rotation) -> Rotation {
+                let up = lhs.up();
+                let fwd = lhs.forward();
+                let rot_up = rhs.source_face(up);
+                let rot_fwd = rhs.source_face(fwd);
+                // Pattern matching is used here because it's a const fn and unwrap()
+                // won't work.
+                let Some(rot) = Rotation::from_up_and_forward(rot_up, rot_fwd) else {
+                    unreachable!()
+                };
+                rot
+            }
+            let mut table = [[Rotation::IDENTITY; 32]; 24];
+            let mut lhs_i = 0;
+            while lhs_i < 24 {
+                let mut rhs_i = 0;
+                while rhs_i < 24 {
+                    let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
+                    let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
+                    table[rhs_i as usize][lhs_i as usize] = deorient_slow(lhs, rhs);
+                    rhs_i += 1;
+                }
+                lhs_i += 1;
+            }
+            table
         };
-        rot
+        DEORIENT_TABLE[rotation.0 as usize][self.0 as usize]
     }
 
+    #[must_use]
+    #[inline(always)]
+    pub const fn deorient_local(self, rotation: Self) -> Self {
+        rotation.invert().reorient(self)
+    }
+
+    #[must_use]
+    #[inline(always)]
     pub const fn conjugate(self, rotation: Self) -> Self {
-        self.invert().reorient(rotation).reorient(self)
+        const CONJUGATE_TABLE: [[Rotation; 32]; 24] = {
+            let mut table = [[Rotation::IDENTITY; 32]; 24];
+            let mut lhs_i = 0;
+            while lhs_i < 24 {
+                let mut rhs_i = 0;
+                while rhs_i < 24 {
+                    let lhs = unsafe { Rotation::from_u8_unchecked(lhs_i) };
+                    let rhs = unsafe { Rotation::from_u8_unchecked(rhs_i) };
+                    table[lhs_i as usize][rhs_i as usize] = lhs.invert().reorient(rhs).reorient(lhs);
+                    rhs_i += 1;
+                }
+                lhs_i += 1;
+            }
+            table
+        };
+        CONJUGATE_TABLE[self.0 as usize][rotation.0 as usize]
     }
     
     // verified (2025-12-28)
@@ -948,7 +1012,17 @@ impl Rotation {
     #[must_use]
     #[inline]
     pub const fn invert(self) -> Self {
-        Self::IDENTITY.deorient(self)
+        const INVERT_TABLE: [Rotation; 24] = {
+            let mut table = [Rotation::IDENTITY; 24];
+            let mut i = 0;
+            while i < 24 {
+                let rot = unsafe { Rotation::from_u8_unchecked(i) };
+                table[i as usize] = Rotation::IDENTITY.deorient(rot);
+                i += 1;
+            }
+            table
+        };
+        INVERT_TABLE[self.0 as usize]
     }
 
     #[must_use]
@@ -1063,6 +1137,62 @@ impl Iterator for RotationIterator {
         let result = Some(unsafe { Rotation::from_u8_unchecked(self.rotation) });
         self.rotation += 1;
         result
+    }
+}
+
+#[derive(Clone)]
+pub struct CartesianRotationIter<const PRODUCTS: usize> {
+    iterators: [u8; PRODUCTS],
+}
+
+impl<const PRODUCTS: usize> CartesianRotationIter<PRODUCTS> {
+    pub const fn new() -> Self {
+        Self {
+            iterators: [0u8; PRODUCTS],
+        }
+    }
+
+    #[must_use]
+    pub const fn next(&mut self) -> Option<[Rotation; PRODUCTS]> {
+        if PRODUCTS == 0 {
+            return None;
+        }
+
+        if self.iterators[0] >= 24 {
+            return None;
+        }
+
+        union Transmuter<const PRODUCTS: usize> {
+            u8_prods: [u8; PRODUCTS],
+            rot_prods: [Rotation; PRODUCTS],
+        }
+        let result = Some(unsafe {
+            Transmuter {
+                u8_prods: self.iterators,
+            }.rot_prods
+        });
+
+        let mut i = PRODUCTS;
+        if i != 0 {
+            loop {
+                i -= 1;
+                if i == 0 || self.iterators[i] < 23 {
+                    self.iterators[i] += 1;
+                    break;
+                }
+                self.iterators[i] = 0;
+            }
+        }
+        
+        result
+    }
+}
+
+impl<const PRODUCTS: usize> Iterator for CartesianRotationIter<PRODUCTS> {
+    type Item = [Rotation; PRODUCTS];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next()
     }
 }
 
