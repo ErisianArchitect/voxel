@@ -153,14 +153,6 @@ macro_rules! rotate_coord_fns {
                 #[must_use]
                 pub const fn [<rotate_coord_ $type>](self, (x, y, z): ($type, $type, $type)) -> ($type, $type, $type) {
                     use Rot::*;
-                    #[repr(u8)]
-                    #[derive(Clone, Copy)]
-                    enum XYZ {
-                        X = 0,
-                        Y = 1,
-                        Z = 2,
-                    }
-                    use XYZ::{X, Y, Z};
                     match self.0 {
                         PosY0 /* (0, PosY) */ => (x, y, z), // Default rotation, no change.
                         PosY1 /* (1, PosY) */ => (z, y, -x),
