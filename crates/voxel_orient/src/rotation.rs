@@ -193,25 +193,6 @@ macro_rules! rotate_coord_fns {
     };
 }
 
-/// ```rust, ignore
-/// pad_table![]
-/// ```
-macro_rules! pad_table {
-    ($($elem:ident),*$(,)?) => {
-        [$(Direction::$elem,)* Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY, Direction::PosY]
-    }
-}
-
-/// Pads a table of 6 directions into a table of 8 directions (where the extras are PosY).
-/// ```rust, ignore
-/// pad_direction_table[PosY, PosX, PosZ, NegY, NegX, NegZ]
-/// ```
-macro_rules! pad_direction_table {
-    ($pos_y:ident, $pos_x:ident, $pos_z:ident, $neg_y:ident, $neg_x:ident, $neg_z:ident) => {
-        [Direction::$pos_y, Direction::$pos_x, Direction::$pos_z, Direction::$neg_y, Direction::$neg_x, Direction::$neg_z, Direction::PosY, Direction::PosY]
-    }
-}
-
 impl Rotation {
     #[cfg(feature = "glam")]
     const QUATS: [Quat; 24] = [
