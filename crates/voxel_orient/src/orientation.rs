@@ -2,8 +2,6 @@
 
 
 
-#[cfg(feature = "glam")]
-use crate::CacheAlignedArray;
 use crate::{
     Axis, canonical::CanonicalGroup, direction::Direction, flip::Flip, orient_table,
     orientation_enum::Orient, pack_flip_and_rotation, polarity::Pol, rotation::Rotation,
