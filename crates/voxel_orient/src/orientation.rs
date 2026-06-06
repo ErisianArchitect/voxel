@@ -1008,7 +1008,7 @@ impl Orientation {
     }
 
     #[must_use]
-    #[inline] // TODO: I'm not so sure about this...
+    #[inline]
     pub const fn deorient_local(self, orientation: Self) -> Self {
         orientation.invert().reorient(self)
     }

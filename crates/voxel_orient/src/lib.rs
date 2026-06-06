@@ -26,8 +26,8 @@ pub mod parity;
 pub mod polarity;
 pub mod rotation;
 
-#[cfg(target_arch = "x86_64")]
-mod simd;
+// #[cfg(target_arch = "x86_64")]
+// mod simd;
 
 pub use axis::Axis;
 pub use direction::Direction;
