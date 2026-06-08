@@ -15,6 +15,7 @@ rust-version.workspace = true
 [features]
 default = []
 glam = ["dep:glam"]
+simd = []
 
 [dependencies]
 # Internal
