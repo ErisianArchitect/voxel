@@ -1,0 +1,25 @@
+{
+  "locations": [
+    {
+      "root": "crates/voxel_core",
+      "include": [
+        "src/**/*.rs",
+        "tests/**/*.rs"
+      ]
+    },
+    {
+      "root": "crates/voxel_orient",
+      "include": [
+        "src/**/*.rs",
+        "tests/**/*.rs"
+      ]
+    },
+    {
+      "root": "tools/headers",
+      "include": [
+        "src/**/*.rs",
+        "tests/**/*.rs"
+      ]
+    }
+  ]
+}
