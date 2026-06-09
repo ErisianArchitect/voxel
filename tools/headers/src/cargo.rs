@@ -11,8 +11,7 @@
 
 
 use std::{
-    env::{current_dir, var},
-    path::{Ancestors, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use toml::{

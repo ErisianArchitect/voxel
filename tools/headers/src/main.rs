@@ -11,10 +11,6 @@
 
 
 use std::{
-    env::{
-        var,
-        current_dir,
-    },
     path::{Path, PathBuf},
 };
 

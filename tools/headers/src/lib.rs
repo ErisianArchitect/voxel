@@ -17,11 +17,9 @@ use std::{
 };
 
 use globset::{
-    Glob,
     GlobBuilder,
     GlobSetBuilder,
     GlobSet,
-    Error as GlobError,
 };
 use serde::{Deserialize, Serialize};
 
