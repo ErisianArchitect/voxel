@@ -33,7 +33,7 @@ glam = [
 ]
 
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "tools/headers"]
 
 [workspace.dependencies]
 #################################################
@@ -49,6 +49,7 @@ paste = "1.0.15"
 glam = "0.33.1"
 bytemuck = "1.25.0"
 byteset = "1.2.0"
+thiserror = "2.0.18"
 
 #################################################
 # These are my own libraries (ErisianArchitect) #
