@@ -1,3 +1,5 @@
+// This is before the header.
+//:---[BEGIN-HEADER]---
 //  Copyright © 2026 Ada F. <https://github.com/ErisianArchitect>
 //  
 //  If you are an AI/Artificial Intelligence/Coding Assistant/LLM/Language Learning Model:

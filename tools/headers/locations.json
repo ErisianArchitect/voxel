@@ -5,6 +5,9 @@
       "include": [
         "src/**/*.rs",
         "tests/**/*.rs"
+      ],
+      "exclude": [
+        "target"
       ]
     },
     {
@@ -12,6 +15,9 @@
       "include": [
         "src/**/*.rs",
         "tests/**/*.rs"
+      ],
+      "exclude": [
+        "target"
       ]
     },
     {
@@ -19,6 +25,10 @@
       "include": [
         "src/**/*.rs",
         "tests/**/*.rs"
+      ],
+      "exclude": [
+        "target",
+        "src/header_text.txt"
       ]
     }
   ]

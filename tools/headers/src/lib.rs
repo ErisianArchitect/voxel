@@ -10,8 +10,6 @@
 
 
 
-pub mod cargo;
-
 use std::{
     borrow::Cow, path::{Path, PathBuf}
 };
@@ -22,6 +20,7 @@ use globset::{
     GlobSet,
 };
 use serde::{Deserialize, Serialize};
+use toml::Table;
 
 pub struct GlobSearch {
     root: PathBuf,
@@ -37,9 +36,31 @@ pub enum Error {
     Glob(#[from] globset::Error),
     #[error("JSON Error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("Toml Serialize Error: {0}")]
+    TomlSer(#[from] toml::ser::Error),
+    #[error("Toml Deserialize Error: {0}")]
+    TomDe(#[from] toml::de::Error),
 }
 
 pub type Result<T = (), E = Error> = std::result::Result<T, E>;
+
+pub fn find_workspace_dir<P: AsRef<Path>>(start: P) -> Result<Option<PathBuf>> {
+    fn find_workspace_dir_inner(path: &Path) -> Result<Option<PathBuf>> {
+        for path in path.ancestors() {
+            let cargo_path = path.join("Cargo.toml");
+            if !cargo_path.is_file() {
+                continue;
+            }
+            let toml_string = std::fs::read_to_string(&cargo_path)?;
+            let cargo_toml: Table = toml::from_str(toml_string.as_str())?;
+            if cargo_toml.contains_key("workspace") {
+                return Ok(Some(path.to_path_buf()));
+            }
+        }
+        Ok(None)
+    }
+    find_workspace_dir_inner(start.as_ref())
+}
 
 impl GlobSearch {
     pub fn new<I: IntoIterator<Item = globset::Glob>, E: IntoIterator<Item = globset::Glob>>(root: PathBuf, include: I, exclude: Option<E>) -> Result<Self> {
@@ -87,6 +108,9 @@ impl GlobSearch {
                     if search.include(subpath) {
                         f(&path)?;
                         println!("Transformed: {}", path.display());
+                    }
+                    if search.exclude(subpath) {
+                        println!("Excluded: {}", path.display());
                     }
                     if path.is_dir() && !search.exclude(subpath) {
                         for_each_recursive(Cow::Owned(path), search, f)?;
