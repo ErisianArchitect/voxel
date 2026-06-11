@@ -33,7 +33,7 @@ glam = [
 ]
 
 [workspace]
-members = ["crates/*", "tools/headers"]
+members = ["crates/*", "tools/*"]
 
 [workspace.dependencies]
 #################################################
