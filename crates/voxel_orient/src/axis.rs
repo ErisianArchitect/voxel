@@ -26,11 +26,18 @@ const _: () = isit::const_assert(Axis::Y as u8 == 1);
 const _: () = isit::const_assert(Axis::Z as u8 == 2);
 
 impl Axis {
+    /// All three axes in lexicographic order
+    /// (which is the same as their discriminant order) `[Axis::X, Axis::Y, Axis::Z]`.
     pub const AXES: [Self; 3] = [Axis::X, Axis::Y, Axis::Z];
 
+    /// Create an axis from a raw [u8] value.
+    /// 
+    /// Value must by `0` (X), `1` (Y), or `2` (Z). All other values
+    /// will produce undefined behavior.
     #[must_use]
     #[inline(always)]
     pub const unsafe fn from_u8_unchecked(axis: u8) -> Self {
+        debug_assert!(axis < 3);
         unsafe { ::core::mem::transmute(axis) }
     }
     
