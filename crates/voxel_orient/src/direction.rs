@@ -81,20 +81,34 @@ impl Direction {
         Direction::NegZ,
     ];
 
+    /// The right-handed left direction.
     pub const LEFT: Direction = Direction::NegX;
+    /// The right-handed down/bottom direction.
     pub const DOWN: Direction = Direction::NegY;
+    /// The right-handed down/bottom direction.
     pub const BOTTOM: Direction = Direction::DOWN;
+    /// The right-handed forward/front direction.
     pub const FORWARD: Direction = Direction::NegZ;
+    /// The right-handed forward/front direction.
     pub const FRONT: Direction = Direction::FORWARD;
+    /// The right-handed right direction.
     pub const RIGHT: Direction = Direction::PosX;
+    /// The right-handed up/top direction.
     pub const UP: Direction = Direction::PosY;
+    /// The right-handed up/top direction.
     pub const TOP: Direction = Direction::UP;
+    /// The right-handed backward/back direction.
     pub const BACKWARD: Direction = Direction::PosZ;
+    /// The right-handed backward/back direction.
     pub const BACK: Direction = Direction::BACKWARD;
 
+    /// The right-handed North direction (equivalent to [Direction::FORWARD]).
     pub const NORTH: Direction = Direction::FORWARD;
+    /// The right-handed West direction (equivalent to [Direction::LEFT]).
     pub const WEST: Direction = Direction::LEFT;
+    /// The right-handed South direction (equivalent to [Direction::BACKWARD]).
     pub const SOUTH: Direction = Direction::BACKWARD;
+    /// The right-handed East direction (equivalent to [Direction::RIGHT]).
     pub const EAST: Direction = Direction::RIGHT;
 
     // verified (2026-1-5)
@@ -151,6 +165,7 @@ impl Direction {
         rotation.reface(self)
     }
 
+    /// Checks if `direction` is orthogonal to `self` (at a 90-degree angle).
     #[inline]
     pub const fn is_orthogonal_to(self, direction: Self) -> bool {
         #[repr(C, align(8))]
@@ -204,6 +219,7 @@ impl Direction {
         AXES[self as usize]
     }
 
+    /// Gets the polarity (whether it is positive or negative) of this direction.
     #[inline]
     pub const fn polarity(self) -> Pol {
         const POLARITIES: [Pol; 6] = [
@@ -217,6 +233,7 @@ impl Direction {
         POLARITIES[self as usize]
     }
 
+    /// Gets both the polarity (whether it is positive or negative) and the axis of this direction.
     #[inline]
     pub const fn polar_axis(self) -> (Pol, Axis) {
         const TABLE: [(Pol, Axis); 6] = [
@@ -230,6 +247,7 @@ impl Direction {
         TABLE[self as usize]
     }
 
+    /// Create a [Direction] from a polarity and an axis.
     #[inline]
     pub const fn from_polar_axis(polarity: Pol, axis: Axis) -> Self {
         use Direction::*;
@@ -256,11 +274,15 @@ impl Direction {
 
     // verified (2025-12-28)
     // This order must not change! Certain code depends on it.
+    /// Gets the discriminat for [Direction] that must be used as the bit value
+    /// for [Rotation]. This is generally expected to be equal to the enum's discriminant
+    /// (which is expected to remain stable for the foreseeable future).
     #[inline]
     pub const fn rotation_discriminant(self) -> u8 {
         self as u8
     }
 
+    /// The inverse of [Direction::rotation_discriminat]. Creates a [Direction] from the rotation discriminant.
     #[inline]
     pub const fn from_rotation_discriminant(rotation_discriminant: u8) -> Option<Self> {
         Some(match rotation_discriminant {
@@ -309,6 +331,10 @@ impl Direction {
     }
 
     // verified (2025-12-28)
+    /// On a non-oriented cube, each face has an "up" face. That's the face
+    /// whose normal points to the top of the given faces UV plane.
+    /// 
+    /// When rotated by `angle` (in 90-degree increments), returns the rotated `up` face.
     pub const fn up_at_angle(self, angle: i32) -> Direction {
         match wrap_angle(angle) {
             0 => self.up(),
@@ -337,6 +363,10 @@ impl Direction {
     }
 
     // verified (2025-12-28)
+    /// On a non-oriented cube, each face has a "left" face. That's the face
+    /// whose normal points to the left of the given face's UV plane.
+    /// 
+    /// When rotated by `angle` (in 90-degree increments), returns the rotated `left` face.
     pub const fn left_at_angle(self, angle: i32) -> Direction {
         match wrap_angle(angle) {
             0 => self.left(),
@@ -365,6 +395,10 @@ impl Direction {
     }
 
     // verified (2025-12-28)
+    /// On a non-oriented cube, each face has a "down" face. That's the face
+    /// whose normal points to the bottom of the given face's UV plane.
+    /// 
+    /// When rotated by `angle` (in 90-degree increments), returns the rotated `down` face.
     pub const fn down_at_angle(self, angle: i32) -> Direction {
         match wrap_angle(angle) {
             0 => self.down(),
@@ -393,6 +427,10 @@ impl Direction {
     }
 
     // verified (2025-12-28)
+    /// On a non-oriented cube, each face has a "right" face. That's the face
+    /// whose normal points to the right of the given face's UV plane.
+    /// 
+    /// When rotated by `angle` (in 90-degree increments), returns the rotated `right` face.
     pub const fn right_at_angle(self, angle: i32) -> Direction {
         match wrap_angle(angle) {
             0 => self.right(),
@@ -405,6 +443,7 @@ impl Direction {
     }
 
     // verified (2025-12-28)
+    /// Returns an [f32] tuple ([(f32, f32, f32)]) for this direction's normal.
     #[inline]
     pub const fn to_ftuple(self) -> (f32, f32, f32) {
         use Direction::*;
@@ -419,6 +458,7 @@ impl Direction {
     }
 
     // verified (2025-12-28)
+    /// Returns an [i32] tuple ([(i32, i32, i32)]) for this direction's normal.
     #[inline]
     pub const fn to_ituple(self) -> (i32, i32, i32) {
         use Direction::*;
@@ -433,6 +473,7 @@ impl Direction {
     }
 
     // verified (2025-12-28)
+    /// Returns an [f32] array ([[f32; 3]]) for this direction's normal.
     #[inline]
     pub const fn to_farray(self) -> [f32; 3] {
         let (x, y, z) = self.to_ftuple();
@@ -440,13 +481,16 @@ impl Direction {
     }
 
     // verified (2025-12-28)
+    /// Returns an [i32] array ([[i32; 3]]) for this direction's normal.
     #[inline]
     pub const fn to_iarray(self) -> [i32; 3] {
         let (x, y, z) = self.to_ituple();
         [x, y, z]
     }
 
-    /// Converts the [Direction] into a unit vector.
+    /// Returns a [Vec3] for this direction's normal.
+    /// 
+    /// [Vec3]: glam::Vec3
     #[cfg(feature = "glam")]
     #[inline]
     pub const fn to_vec3(self) -> glam::Vec3 {
@@ -454,6 +498,9 @@ impl Direction {
         glam::Vec3::new(x, y, z)
     }
 
+    /// Returns a [Vec3A] for this direction's normal.
+    /// 
+    /// [Vec3A]: glam::Vec3A
     #[cfg(feature = "glam")]
     #[inline]
     pub const fn to_vec3a(self) -> Vec3A {
@@ -461,7 +508,9 @@ impl Direction {
         glam::Vec3A::new(x, y, z)
     }
 
-    /// Converts the [Direction] into a unit integer vector.
+    /// Returns a [IVec3] for this direction's normal.
+    /// 
+    /// [IVec3]: glam::IVec3
     #[cfg(feature = "glam")]
     #[inline]
     pub const fn to_ivec3(self) -> glam::IVec3 {
