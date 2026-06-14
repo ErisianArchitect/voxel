@@ -20,11 +20,11 @@
 //! equivalent if they have the same Up, Right, and Forward
 //! directions. There are 4 groups of canonical orientations.
 //! `Group0`, `Group1`, `Group2` and `Group3`. These 4 groups have
-//! 48 orientations for each of the X, Y, and Z axes. There is some
-//! overlap between axes. Each group has a specific [Orientation]
-//! for canonicalization based on [Flip] state of the orientation
-//! being canonicalized, and the axis of canonicalization. These
-//! are Canonicalization Orientations. The Group0 is always
+//! 48 orientations for each of the X, Y, and Z axes or XYZ. There
+//! is some overlap between axes. Each group has a specific
+//! [Orientation] for canonicalization based on [Flip] state of the
+//! orientation being canonicalized, and the axis of canonicalization.
+//! These are Canonicalization Orientations. The Group0 is always
 //! [Orientation::IDENTITY].
 //!
 //! # Axial Group Cayley Table
@@ -43,9 +43,8 @@ const XY_ORIENT: Orientation = Orientation::new(Rotation::new(Direction::NegY, 2
 const XZ_ORIENT: Orientation = Orientation::new(Rotation::new(Direction::PosY, 2), Flip::XZ);
 const YZ_ORIENT: Orientation = Orientation::new(Rotation::new(Direction::NegY, 0), Flip::YZ);
 
-/// The [CanonicalGroup] represents which group of representations an orientation occupies.
-/// 
-/// For each orientation within the S3
+/// The [CanonicalGroup] is a group of `48` distinct orientations. Each [CanonicalGroup] has
+/// distinct representations from the other groups, though they have equivalent orientations.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CanonicalGroup {
@@ -56,6 +55,7 @@ pub enum CanonicalGroup {
 }
 
 impl CanonicalGroup {
+    /// All groups in order.
     pub const GROUPS: [Self; 4] = [
         Self::Group0,
         Self::Group1,
@@ -63,19 +63,37 @@ impl CanonicalGroup {
         Self::Group3,
     ];
 
+    /// Create a [CanonicalGroup] from its group index.
+    /// 
+    /// Value must be `0..=3`.
     #[must_use]
     #[inline(always)]
-    pub const fn from_u8(group: u8) -> Self {
+    pub const unsafe fn from_u8_unchecked(group: u8) -> Self {
         debug_assert!(group <= 0b11, "group value out of bounds (0..4)");
         unsafe { transmute(group & 0b11) }
     }
 
+    /// Create a [CanonicalGroup] from its group index.
+    /// 
+    /// Value must be `0..=3`.
+    #[must_use]
+    #[inline(always)]
+    pub const fn from_u8(group: u8) -> Option<Self> {
+        if group <= 0b11 {
+            Some(unsafe { Self::from_u8_unchecked(group) })
+        } else {
+            None
+        }
+    }
+
+    /// Convert the group to a u8 index.
     #[must_use]
     #[inline(always)]
     pub const fn to_u8(self) -> u8 {
         self as u8
     }
 
+    /// Gets the transition orientation for the X axis.
     #[must_use]
     #[inline]
     pub const fn orient_x(self) -> Orientation {
@@ -87,6 +105,7 @@ impl CanonicalGroup {
         }
     }
 
+    /// Gets the transition orientation for the Y axis.
     #[must_use]
     #[inline]
     pub const fn orient_y(self) -> Orientation {
@@ -98,6 +117,7 @@ impl CanonicalGroup {
         }
     }
 
+    /// Gets the transition orientation for the Z axis.
     #[must_use]
     #[inline]
     pub const fn orient_z(self) -> Orientation {
@@ -109,6 +129,7 @@ impl CanonicalGroup {
         }
     }
 
+    /// Compose two groups to get a third group.
     #[must_use]
     #[inline(always)]
     pub const fn compose(self, group: Self) -> Self {
@@ -127,24 +148,28 @@ impl CanonicalGroup {
     //     Self::COMPOSITION_TABLE[Axis::X as usize][self as usize][rhs as usize]
     // }
 
+    /// Cycle through groups.
     #[must_use]
     #[inline(always)]
     pub const fn cycle(self, count: i32) -> Self {
         Self::GROUPS[((self as i64 + count as i64) % 4) as usize]
     }
 
+    /// Compare two groups for equality.
     #[must_use]
     #[inline(always)]
     pub const fn eq(self, other: Self) -> bool {
         self as u8 == other as u8
     }
 
+    /// Compare two groups for inequality.
     #[must_use]
     #[inline(always)]
     pub const fn ne(self, other: Self) -> bool {
         self as u8 != other as u8
     }
 
+    /// Iterate through the 4 groups.
     #[must_use]
     #[inline(always)]
     pub const fn iter() -> CanonicalGroupIter {
@@ -153,6 +178,7 @@ impl CanonicalGroup {
         }
     }
 
+    /// Get the [CanonicalGroup]'s text representation.
     #[must_use]
     #[inline(always)]
     pub const fn text(self) -> &'static str {
@@ -165,6 +191,7 @@ impl CanonicalGroup {
         NAMES[self as usize]
     }
 
+    /// Get an object that can be printed using [std::fmt::Display].
     #[must_use]
     #[inline(always)]
     pub const fn display(self, short: bool) -> CanonicalGroupDisplay {
@@ -175,6 +202,7 @@ impl CanonicalGroup {
     }
 }
 
+/// Iterator over the 4 [CanonicalGroup]s.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CanonicalGroupIter {
     group_index: u8,
@@ -194,6 +222,7 @@ impl Iterator for CanonicalGroupIter {
     }
 }
 
+/// Used to display [CanonicalGroup] as text.
 #[derive(Clone, Copy)]
 pub struct CanonicalGroupDisplay {
     group: CanonicalGroup,
