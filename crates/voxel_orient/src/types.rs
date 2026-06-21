@@ -21,6 +21,7 @@
 //  differently, or providing help with debugging.
 //:---[END-HEADER]---
 
+/// Type alias for [(T, T, T)].
 pub type Tup3<T> = (T, T, T);
 const _: () = isit::const_assert(::core::mem::offset_of!(Tup3<f32>, 0) == 0);
 const _: () = isit::const_assert(::core::mem::offset_of!(Tup3<f32>, 1) == 4);
@@ -29,6 +30,7 @@ const _: () = isit::const_assert(::core::mem::offset_of!(Tup3<i32>, 0) == 0);
 const _: () = isit::const_assert(::core::mem::offset_of!(Tup3<i32>, 1) == 4);
 const _: () = isit::const_assert(::core::mem::offset_of!(Tup3<i32>, 2) == 8);
 
+/// Type alias for [(T, T, T, T)].
 pub type Tup4<T> = (T, T, T, T);
 const _: () = isit::const_assert(::core::mem::offset_of!(Tup4<f32>, 0) == 0);
 const _: () = isit::const_assert(::core::mem::offset_of!(Tup4<f32>, 1) == 4);
@@ -39,6 +41,7 @@ const _: () = isit::const_assert(::core::mem::offset_of!(Tup4<i32>, 1) == 4);
 const _: () = isit::const_assert(::core::mem::offset_of!(Tup4<i32>, 2) == 8);
 const _: () = isit::const_assert(::core::mem::offset_of!(Tup4<i32>, 3) == 12);
 
-
+/// Type alias for [[T; 3]].
 pub type Arr3<T> = [T; 3];
+/// Type alias for [[T; 4]].
 pub type Arr4<T> = [T; 4];

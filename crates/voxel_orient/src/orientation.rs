@@ -33,6 +33,7 @@ use lolevel::{
 };
 use paste::paste;
 
+/// An orientation that has been deconstructed from its bit-packed form into its individual components.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeconstructedOrientation {
     pub flip_x: bool,
